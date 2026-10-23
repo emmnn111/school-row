@@ -41,7 +41,11 @@ const equipmentSchema = new mongoose.Schema(
     location: {
       type: String,
       default: "Faculty Office"
-    }
+    },
+        image: {
+      type: String,
+      default: ""
+    },
   },
   { timestamps: true }
 );

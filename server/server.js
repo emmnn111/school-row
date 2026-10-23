@@ -13,9 +13,17 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173"
+    origin: [
+    "http://localhost:5173",
+    "http://localhost:5174"
+  ]
 }));
 app.use(express.json());
+
+app.use(
+  "/api/borrowings",
+  require("./routes/borrowingRoutes")
+);
 
 // Homepage
 app.get("/", (req, res) => {
@@ -37,7 +45,7 @@ app.get("/api/health", (req, res) => {
 // Register routes
 app.use("/api/equipment", equipmentRoutes);
 app.use("/api/borrowings", borrowingRoutes);
-
+app.use("/api/equipment", require("./routes/equipmentRoutes"));
 // Unknown route
 app.use((req, res) => {
   res.status(404).json({
