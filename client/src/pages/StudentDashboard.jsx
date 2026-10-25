@@ -1,734 +1,762 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
-  LayoutDashboard,
+  LogOut,
   Package,
   Search,
-  RefreshCw,
-  CalendarDays,
   ClipboardList,
   Clock,
   CheckCircle,
   XCircle,
-  LogOut
+  RefreshCw,
 } from "lucide-react";
-import "../App.css";
+import "./StudentDashboard.css";
+import AIAssistant from "../components/AIAssistant";
 
-const API_URL = "http://localhost:5000/api";
+const API = "http://localhost:5000/api";
 
 const emptyForm = {
   studentName: "",
   studentId: "",
-  courseSection: "",
+  course: "",
   equipmentId: "",
-  quantity: 1,
-  borrowDate: new Date().toISOString().split("T")[0],
-  expectedReturnDate: "",
-  purpose: ""
+  quantity: "1",
+  startDate: "",
+  endDate: "",
+  purpose: "",
 };
 
-export default function StudentDashboard() {
+function StudentDashboard() {
+  const navigate = useNavigate();
+
+  const [student, setStudent] = useState(null);
   const [equipment, setEquipment] = useState([]);
   const [borrowings, setBorrowings] = useState([]);
   const [search, setSearch] = useState("");
-  const [studentIdSearch, setStudentIdSearch] = useState("");
-  const [activeStudentId, setActiveStudentId] = useState("");
-  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [form, setForm] = useState(emptyForm);
 
-  const loadEquipment = async () => {
-    try {
-      const response = await fetch(`${API_URL}/equipment`);
+  const selectedEquipment =
+    equipment.find(
+      (item) => String(item._id) === String(form.equipmentId)
+    ) || null;
 
-      if (!response.ok) {
-        throw new Error("Unable to load equipment.");
+  const signOut = useCallback(() => {
+    localStorage.removeItem("schoolrowToken");
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  const apiFetch = useCallback(
+    async (url, options = {}) => {
+      const token = localStorage.getItem("schoolrowToken");
+
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options.body
+            ? { "Content-Type": "application/json" }
+            : {}),
+        },
+      });
+
+      if (response.status === 401) {
+        signOut();
+        throw new Error("Your session expired. Please sign in again.");
       }
 
-      const result = await response.json();
-      setEquipment(Array.isArray(result) ? result : result.data || []);
+      return response;
+    },
+    [signOut]
+  );
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const token = localStorage.getItem("schoolrowToken");
+
+      if (!token) {
+        signOut();
+        return;
+      }
+
+      const [profileRes, equipmentRes] = await Promise.all([
+        apiFetch(`${API}/auth/me`),
+        apiFetch(`${API}/equipment`),
+      ]);
+
+      if (!profileRes.ok) {
+        throw new Error("Could not load your student profile.");
+      }
+
+      if (!equipmentRes.ok) {
+        throw new Error("Could not load equipment.");
+      }
+
+      const profileData = await profileRes.json();
+      const equipmentData = await equipmentRes.json();
+
+      const profile =
+        profileData.student ||
+        profileData.user ||
+        profileData.data ||
+        profileData;
+
+      setStudent(profile);
+
+      setEquipment(
+        Array.isArray(equipmentData)
+          ? equipmentData
+          : equipmentData.data || equipmentData.equipment || []
+      );
+
+      setForm((previous) => ({
+        ...previous,
+        studentName:
+          previous.studentName ||
+          profile.fullName ||
+          profile.name ||
+          profile.studentName ||
+          "",
+        studentId:
+          previous.studentId ||
+          profile.studentId ||
+          profile.studentID ||
+          "",
+        course:
+          previous.course ||
+          [profile.course, profile.section]
+            .filter(Boolean)
+            .join(" / ") ||
+          profile.courseSection ||
+          "",
+      }));
+
+      const borrowingRes = await apiFetch(`${API}/borrowings`);
+
+      if (!borrowingRes.ok) {
+        throw new Error("Could not load your borrowing history.");
+      }
+
+      const borrowingData = await borrowingRes.json();
+
+      const allBorrowings = Array.isArray(borrowingData)
+        ? borrowingData
+        : borrowingData.data || borrowingData.borrowings || [];
+
+      const currentStudentId =
+        profile.studentId || profile.studentID || "";
+
+      setBorrowings(
+        currentStudentId
+          ? allBorrowings.filter(
+              (item) =>
+                String(item.studentId) === String(currentStudentId)
+            )
+          : []
+      );
     } catch (err) {
-      setError(err.message || "Failed to load equipment.");
+      setError(err.message || "Unable to load the dashboard.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadBorrowings = async (studentId) => {
-    if (!studentId.trim()) {
-      setBorrowings([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${API_URL}/borrowings?studentId=${encodeURIComponent(
-          studentId.trim()
-        )}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Unable to load borrowing requests.");
-      }
-
-      const result = await response.json();
-      setBorrowings(Array.isArray(result) ? result : result.data || []);
-    } catch (err) {
-      setError(err.message || "Failed to load borrowing requests.");
-    }
-  };
+  }, [apiFetch, signOut]);
 
   useEffect(() => {
-    loadEquipment();
-  }, []);
+    loadDashboard();
+  }, [loadDashboard]);
 
-  const handleChange = (event) => {
+  function handleChange(event) {
     const { name, value } = event.target;
 
     setForm((previous) => ({
       ...previous,
-      [name]: value
-    }));
-  };
-
-  const handleBorrow = (item) => {
-    setForm((previous) => ({
-      ...previous,
-      equipmentId: item._id,
-      quantity: 1
+      [name]: value,
     }));
 
-    setMessage("");
     setError("");
+  }
 
-    document
-      .getElementById("student-borrow-form")
-      ?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const handleSubmit = async (event) => {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    if (!form.equipmentId) {
-      setError("Please select equipment first.");
-      return;
-    }
-
     if (
       !form.studentName.trim() ||
       !form.studentId.trim() ||
-      !form.courseSection.trim() ||
-      !form.purpose.trim()
+      !form.course.trim()
     ) {
-      setError("Please complete all required fields.");
+      setError(
+        "Please complete your name, student ID, and course/section."
+      );
       return;
     }
 
-    if (
-      !form.expectedReturnDate ||
-      form.expectedReturnDate < form.borrowDate
-    ) {
-      setError("The return date must be on or after the borrow date.");
+    if (!form.equipmentId || !selectedEquipment) {
+      setError("Please select equipment.");
       return;
     }
 
-    const selectedEquipment = equipment.find(
-      (item) => item._id === form.equipmentId
+    const quantity = Number(form.quantity);
+
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setError("Quantity must be a whole number greater than zero.");
+      return;
+    }
+
+    if (!form.startDate || !form.endDate) {
+      setError("Please select the borrowing and return dates.");
+      return;
+    }
+
+    if (form.endDate < form.startDate) {
+      setError(
+        "The return date must be on or after the borrowing date."
+      );
+      return;
+    }
+
+    if (!form.purpose.trim()) {
+      setError("Please enter the purpose of borrowing.");
+      return;
+    }
+
+    const availableQuantity = Number(
+      selectedEquipment.quantityAvailable ??
+        selectedEquipment.quantity ??
+        selectedEquipment.availableQuantity ??
+        selectedEquipment.stock ??
+        0
     );
 
-    if (
-      !selectedEquipment ||
-      Number(form.quantity) < 1 ||
-      Number(form.quantity) > selectedEquipment.quantityAvailable
-    ) {
-      setError("Please enter a valid available quantity.");
+    if (quantity > availableQuantity) {
+      setError(
+        `Only ${availableQuantity} unit(s) are currently available.`
+      );
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_URL}/borrowings`, {
+      const response = await apiFetch(`${API}/borrowings`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
         body: JSON.stringify({
-          ...form,
-          quantity: Number(form.quantity)
-        })
+          studentName: form.studentName.trim(),
+          studentId: form.studentId.trim(),
+          courseSection: form.course.trim(),
+          equipmentId: selectedEquipment._id,
+          quantity,
+          borrowDate: form.startDate,
+          expectedReturnDate: form.endDate,
+          purpose: form.purpose.trim(),
+        }),
       });
 
-      const result = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
-          result.message || "Failed to submit borrowing request."
+          data.message ||
+            "The borrowing request could not be submitted."
         );
       }
 
-      setMessage("Borrowing request submitted successfully!");
-      setActiveStudentId(form.studentId);
-      setStudentIdSearch(form.studentId);
+      setMessage(
+        data.message || "Borrowing request submitted successfully!"
+      );
+
+      await loadDashboard();
+
       setForm({
         ...emptyForm,
         studentName: form.studentName,
         studentId: form.studentId,
-        courseSection: form.courseSection
+        course: form.course,
       });
-
-      await loadBorrowings(form.studentId);
-      await loadEquipment();
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      setError(err.message || "Unable to submit your request.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const findMyRequests = async (event) => {
-    event.preventDefault();
-    setError("");
-    setMessage("");
-
-    if (!studentIdSearch.trim()) {
-      setError("Enter your student ID to find your requests.");
-      return;
-    }
-
-    setActiveStudentId(studentIdSearch.trim());
-    await loadBorrowings(studentIdSearch.trim());
-  };
+  }
 
   const filteredEquipment = equipment.filter((item) => {
-    const searchText = search.toLowerCase();
+    const matchesCategory =
+      selectedCategory === "All" ||
+      (item.category || "").toLowerCase() ===
+        selectedCategory.toLowerCase();
 
-    return (
-      item.name?.toLowerCase().includes(searchText) ||
-      item.category?.toLowerCase().includes(searchText) ||
-      item.assetCode?.toLowerCase().includes(searchText)
-    );
+    const name =
+      item.name || item.equipmentName || item.itemName || "";
+
+    const matchesSearch = name
+      .toLowerCase()
+      .includes(search.toLowerCase());
+
+    return matchesCategory && matchesSearch;
   });
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case "Approved":
-      case "Borrowed":
-        return "approved";
-      case "Returned":
-        return "returned";
-      case "Rejected":
-        return "rejected";
-      default:
-        return "pending";
-    }
-  };
+  function statusIcon(status) {
+    const value = String(status || "Pending").toLowerCase();
 
-  const getEquipmentName = (borrowing) => {
-    if (
-      borrowing.equipmentId &&
-      typeof borrowing.equipmentId === "object"
-    ) {
-      return borrowing.equipmentId.name || "Equipment";
+    if (value === "approved" || value === "returned") {
+      return <CheckCircle size={17} />;
     }
 
+    if (value === "rejected") {
+      return <XCircle size={17} />;
+    }
+
+    return <Clock size={17} />;
+  }
+
+  if (loading) {
     return (
-      equipment.find((item) => item._id === borrowing.equipmentId)?.name ||
-      "Equipment"
+      <main className="student-dashboard">
+        <p>Loading Schoolrow dashboard...</p>
+      </main>
     );
-  };
-
-  const pendingCount = borrowings.filter(
-    (item) => item.status === "Pending"
-  ).length;
-
-  const approvedCount = borrowings.filter(
-    (item) =>
-      item.status === "Approved" || item.status === "Borrowed"
-  ).length;
-
-  const returnedCount = borrowings.filter(
-    (item) => item.status === "Returned"
-  ).length;
+  }
 
   return (
-    <div className="student-portal">
-      <aside className="student-sidebar">
-        <div className="student-brand">
-          <div className="student-brand-icon">
-            <BookOpen size={25} />
-          </div>
+    <main className="student-dashboard">
+      <header className="dashboard-header">
+        <div className="dashboard-brand">
+          <BookOpen size={30} />
           <div>
-            <h2>Schoolrow</h2>
-            <p>Student Portal</p>
+            <h1>Schoolrow</h1>
+            <p>Student Borrowing Portal</p>
           </div>
         </div>
 
-        <nav className="student-navigation">
-          <a href="#student-home" className="student-nav-link active">
-            <LayoutDashboard size={19} />
-            Dashboard
-          </a>
+        <button type="button" onClick={signOut}>
+          <LogOut size={18} /> Sign Out
+        </button>
+      </header>
 
-          <a href="#student-equipment" className="student-nav-link">
-            <Package size={19} />
-            Equipment
-          </a>
+      <section className="dashboard-welcome">
+        <p>STUDENT DASHBOARD</p>
+        <h2>
+          Welcome,{" "}
+          {student?.fullName ||
+            student?.name ||
+            student?.studentName ||
+            "Student"}
+          !
+        </h2>
+        <p>
+          Find school equipment and manage your borrowing requests.
+        </p>
+      </section>
 
-          <a href="#student-borrow-form" className="student-nav-link">
-            <ClipboardList size={19} />
-            Borrow Equipment
-          </a>
+      {error && (
+        <div className="dashboard-alert error-alert" role="alert">
+          {error}
+        </div>
+      )}
 
-          <a href="#student-requests" className="student-nav-link">
-            <Clock size={19} />
-            My Requests
-          </a>
-        </nav>
-
-        <a href="/" className="student-logout">
-          <LogOut size={18} />
-          Back to Welcome
-        </a>
-      </aside>
-
-      <main className="student-main" id="student-home">
-        <header className="student-topbar">
-          <div>
-            <h1>Student Dashboard</h1>
-            <p>Browse and borrow available school equipment.</p>
-          </div>
-
-          <button
-            type="button"
-            className="student-refresh-button"
-            onClick={() => {
-              loadEquipment();
-              if (activeStudentId) {
-                loadBorrowings(activeStudentId);
-              }
-            }}
-          >
-            <RefreshCw size={17} />
-            Refresh
-          </button>
-        </header>
-
-        {error && (
-          <div className="student-alert student-alert-error">
-            <XCircle size={18} />
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="student-alert student-alert-success">
-            <CheckCircle size={18} />
-            {message}
-          </div>
-        )}
-
-        <section className="student-stats">
-          <div className="student-stat-card">
-            <div className="student-stat-icon">
-              <Package size={23} />
-            </div>
-            <div>
-              <p>Equipment Types</p>
-              <h3>{equipment.length}</h3>
-            </div>
-          </div>
-
-          <div className="student-stat-card">
-            <div className="student-stat-icon">
-              <Clock size={23} />
-            </div>
-            <div>
-              <p>Pending Requests</p>
-              <h3>{pendingCount}</h3>
-            </div>
-          </div>
-
-          <div className="student-stat-card">
-            <div className="student-stat-icon">
-              <CheckCircle size={23} />
-            </div>
-            <div>
-              <p>Approved / Borrowed</p>
-              <h3>{approvedCount}</h3>
-            </div>
-          </div>
-
-          <div className="student-stat-card">
-            <div className="student-stat-icon">
-              <ClipboardList size={23} />
-            </div>
-            <div>
-              <p>Returned</p>
-              <h3>{returnedCount}</h3>
-            </div>
-          </div>
-        </section>
-
-        <section
-          className="student-panel"
-          id="student-equipment"
+      {message && (
+        <div
+          className="dashboard-alert success-alert"
+          role="status"
         >
-          <div className="student-panel-heading">
-            <div>
-              <h2>Available Equipment</h2>
-              <p>Select an item to start a borrowing request.</p>
+          {message}
+        </div>
+      )}
+
+      <section className="dashboard-stats">
+        <article className="stat-card">
+          <Package size={24} />
+          <div>
+            <p>Equipment Items</p>
+            <h3>{equipment.length}</h3>
+          </div>
+        </article>
+
+        <article className="stat-card">
+          <ClipboardList size={24} />
+          <div>
+            <p>My Requests</p>
+            <h3>{borrowings.length}</h3>
+          </div>
+        </article>
+
+        <article className="stat-card">
+          <Clock size={24} />
+          <div>
+            <p>Pending</p>
+            <h3>
+              {
+                borrowings.filter(
+                  (item) =>
+                    String(item.status || "Pending").toLowerCase() ===
+                    "pending"
+                ).length
+              }
+            </h3>
+          </div>
+        </article>
+
+        <article className="stat-card">
+          <CheckCircle size={24} />
+          <div>
+            <p>Approved</p>
+            <h3>
+              {
+                borrowings.filter(
+                  (item) =>
+                    String(item.status || "").toLowerCase() ===
+                    "approved"
+                ).length
+              }
+            </h3>
+          </div>
+        </article>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="section-heading">
+          <div>
+            <h2>Available Equipment</h2>
+            <p>Search and select an item you need.</p>
+          </div>
+
+          <div className="equipment-search">
+            <Search size={18} />
+            <input
+              type="search"
+              placeholder="Search equipment..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="category-filters">
+          {["All", "Sports"].map((category) => (
+            <button
+              key={category}
+              type="button"
+              className={
+                selectedCategory === category
+                  ? "category-button active"
+                  : "category-button"
+              }
+              onClick={() => setSelectedCategory(category)}
+            >
+              {category === "All" ? "All Equipment" : "Sports"}
+            </button>
+          ))}
+        </div>
+
+        {filteredEquipment.length === 0 ? (
+          <p className="empty-state">No equipment found.</p>
+        ) : (
+          <div className="equipment-grid">
+            {filteredEquipment.map((item) => {
+              const name =
+                item.name ||
+                item.equipmentName ||
+                item.itemName ||
+                "Equipment";
+
+              const available = Number(
+                item.quantityAvailable ??
+                  item.quantity ??
+                  item.availableQuantity ??
+                  item.stock ??
+                  0
+              );
+
+              return (
+                <article className="equipment-card" key={item._id}>
+                  {item.image ? (
+                    <img
+                      className="equipment-image"
+                      src={item.image}
+                      alt={name}
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="equipment-image-placeholder">
+                      <Package size={40} />
+                      <span>No image available</span>
+                    </div>
+                  )}
+
+                  <h3>{name}</h3>
+                  <p>{item.category || "School equipment"}</p>
+                  <p>
+                    {item.description || "No description available."}
+                  </p>
+                  <p>Available: {available}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((previous) => ({
+                        ...previous,
+                        equipmentId: String(item._id),
+                      }));
+                      setError("");
+                      setMessage(`Selected: ${name}`);
+                    }}
+                    disabled={!item._id || available < 1}
+                  >
+                    {available < 1
+                      ? "Unavailable"
+                      : "Select Equipment"}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section">
+        <h2>Borrow Equipment</h2>
+        <p>
+          Enter your student information and complete the borrowing
+          request.
+        </p>
+
+        {selectedEquipment && (
+          <p className="selected-equipment">
+            Selected equipment:{" "}
+            <strong>
+              {selectedEquipment.name ||
+                selectedEquipment.equipmentName ||
+                selectedEquipment.itemName ||
+                "Equipment"}
+            </strong>
+          </p>
+        )}
+
+        <form className="borrowing-form" onSubmit={handleSubmit}>
+          <div className="student-info-grid">
+            <div className="student-info-item">
+              <label htmlFor="studentName">Student Name *</label>
+              <input
+                id="studentName"
+                name="studentName"
+                value={form.studentName}
+                onChange={handleChange}
+                placeholder="Enter your full name"
+                required
+              />
             </div>
 
-            <div className="student-search">
-              <Search size={18} />
+            <div className="student-info-item">
+              <label htmlFor="studentId">Student ID *</label>
               <input
-                type="search"
-                placeholder="Search equipment..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                id="studentId"
+                name="studentId"
+                value={form.studentId}
+                onChange={handleChange}
+                placeholder="Enter your student ID"
+                required
+              />
+            </div>
+
+            <div className="student-info-item">
+              <label htmlFor="course">Course / Section *</label>
+              <input
+                id="course"
+                name="course"
+                value={form.course}
+                onChange={handleChange}
+                placeholder="e.g. BSIT / 2A"
+                required
               />
             </div>
           </div>
 
-          {loading ? (
-            <p className="student-empty">Loading equipment...</p>
-          ) : filteredEquipment.length === 0 ? (
-            <p className="student-empty">
-              No equipment found.
-            </p>
-          ) : (
-            <div className="student-equipment-grid">
-              {filteredEquipment.map((item) => (
-                <article
-                  className="student-equipment-card"
-                  key={item._id}
-                >
-                  <div className="student-equipment-image">
-                 
-                  <img
-                    src={
-                      item.image
-                        ? item.image
-                        : "/equipment/default-equipment.jpg"
-                    }
-                    alt={item.name}
-                    onError={(event) => {
-                      event.currentTarget.onerror = null;
-                      event.currentTarget.src = "/equipment/default-equipment.jpg";
-                    }}
-                  />
-
-                  </div>
-
-                  <div className="student-equipment-details">
-                    <span className="student-equipment-category">
-                      {item.category}
-                    </span>
-
-                    <h3>{item.name}</h3>
-
-                    <p className="student-equipment-code">
-                      Asset Code: {item.assetCode}
-                    </p>
-
-                    <p className="student-equipment-description">
-                      {item.description ||
-                        "School equipment available for student borrowing."}
-                    </p>
-
-                    <div className="student-equipment-info">
-                      <span>
-                        Available:{" "}
-                        <strong>{item.quantityAvailable}</strong>
-                      </span>
-
-                      <span
-                        className={`student-condition ${
-                          item.condition === "Damaged"
-                            ? "damaged"
-                            : ""
-                        }`}
-                      >
-                        {item.condition || "Good"}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="student-borrow-button"
-                      disabled={
-                        Number(item.quantityAvailable) < 1 ||
-                        item.condition === "Damaged"
-                      }
-                      onClick={() => handleBorrow(item)}
-                    >
-                      {Number(item.quantityAvailable) < 1
-                        ? "Unavailable"
-                        : item.condition === "Damaged"
-                        ? "Damaged"
-                        : "Borrow Equipment"}
-                    </button>
-                  </div>
-                </article>
-              ))}
+          <div className="form-grid">
+            <div className="form-field">
+              <label htmlFor="equipmentId">Equipment *</label>
+              <select
+                id="equipmentId"
+                name="equipmentId"
+                value={form.equipmentId}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select equipment</option>
+                {equipment.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.name ||
+                      item.equipmentName ||
+                      item.itemName ||
+                      "Equipment"}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </section>
 
-        <section
-          className="student-panel"
-          id="student-borrow-form"
-        >
-          <div className="student-panel-heading">
-            <div>
-              <h2>Borrow Equipment</h2>
-              <p>Complete the form to submit your request.</p>
-            </div>
-          </div>
-
-          <form
-            className="student-borrow-form"
-            onSubmit={handleSubmit}
-          >
-            <div className="student-form-grid">
-              <div className="student-form-group">
-                <label htmlFor="studentName">Full Name *</label>
-                <input
-                  id="studentName"
-                  name="studentName"
-                  value={form.studentName}
-                  onChange={handleChange}
-                  placeholder="Enter your full name"
-                  required
-                />
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="studentId">Student ID *</label>
-                <input
-                  id="studentId"
-                  name="studentId"
-                  value={form.studentId}
-                  onChange={handleChange}
-                  placeholder="Enter your student ID"
-                  required
-                />
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="courseSection">
-                  Course and Section *
-                </label>
-                <input
-                  id="courseSection"
-                  name="courseSection"
-                  value={form.courseSection}
-                  onChange={handleChange}
-                  placeholder="e.g. BSIT 2A"
-                  required
-                />
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="equipmentId">
-                  Select Equipment *
-                </label>
-                <select
-                  id="equipmentId"
-                  name="equipmentId"
-                  value={form.equipmentId}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Choose equipment</option>
-                  {equipment
-                    .filter(
-                      (item) =>
-                        Number(item.quantityAvailable) > 0 &&
-                        item.condition !== "Damaged"
-                    )
-                    .map((item) => (
-                      <option key={item._id} value={item._id}>
-                        {item.name} — {item.quantityAvailable} available
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="quantity">Quantity *</label>
-                <input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  max={
-                    equipment.find(
-                      (item) => item._id === form.equipmentId
-                    )?.quantityAvailable || 1
+            <div className="form-field">
+              <label htmlFor="quantity">Quantity *</label>
+              <input
+                id="quantity"
+                name="quantity"
+                type="number"
+                min="1"
+                step="1"
+                value={form.quantity}
+                onChange={handleChange}
+                onKeyDown={(event) => {
+                  if (
+                    ["-", "+", "e", "E", "."].includes(event.key)
+                  ) {
+                    event.preventDefault();
                   }
-                  value={form.quantity}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="borrowDate">Borrow Date *</label>
-                <input
-                  id="borrowDate"
-                  name="borrowDate"
-                  type="date"
-                  value={form.borrowDate}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="student-form-group">
-                <label htmlFor="expectedReturnDate">
-                  Expected Return Date *
-                </label>
-                <input
-                  id="expectedReturnDate"
-                  name="expectedReturnDate"
-                  type="date"
-                  min={form.borrowDate}
-                  value={form.expectedReturnDate}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="student-form-group student-form-full">
-                <label htmlFor="purpose">Purpose of Borrowing *</label>
-                <textarea
-                  id="purpose"
-                  name="purpose"
-                  rows="4"
-                  value={form.purpose}
-                  onChange={handleChange}
-                  placeholder="Explain why you need this equipment..."
-                  required
-                />
-              </div>
+                }}
+                required
+              />
             </div>
 
-            <button
-              type="submit"
-              className="student-submit-button"
-              disabled={submitting}
-            >
-              <ClipboardList size={18} />
-              {submitting
-                ? "Submitting..."
-                : "Submit Borrowing Request"}
-            </button>
-          </form>
-        </section>
+            <div className="form-field">
+              <label htmlFor="startDate">Borrow Date *</label>
+              <input
+                id="startDate"
+                name="startDate"
+                type="date"
+                value={form.startDate}
+                onChange={handleChange}
+                required
+              />
+            </div>
 
-        <section
-          className="student-panel"
-          id="student-requests"
-        >
-          <div className="student-panel-heading">
-            <div>
-              <h2>My Borrowing Requests</h2>
-              <p>Check the status of your submitted requests.</p>
+            <div className="form-field">
+              <label htmlFor="endDate">Return Date *</label>
+              <input
+                id="endDate"
+                name="endDate"
+                type="date"
+                min={form.startDate || undefined}
+                value={form.endDate}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-field full-width">
+              <label htmlFor="purpose">
+                Purpose of Borrowing *
+              </label>
+              <textarea
+                id="purpose"
+                name="purpose"
+                rows="3"
+                placeholder="Explain why you need this equipment..."
+                value={form.purpose}
+                onChange={handleChange}
+                required
+              />
             </div>
           </div>
 
-          <form
-            className="student-find-requests"
-            onSubmit={findMyRequests}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="primary-button"
           >
-            <input
-              type="text"
-              value={studentIdSearch}
-              onChange={(event) =>
-                setStudentIdSearch(event.target.value)
-              }
-              placeholder="Enter your student ID"
-              aria-label="Student ID to find requests"
-            />
+            {submitting ? "Submitting..." : "Submit Request"}
+          </button>
+        </form>
+      </section>
 
-            <button type="submit">
-              <Search size={17} />
-              Find Requests
-            </button>
-          </form>
+      <section className="dashboard-section">
+        <div className="section-heading">
+          <div>
+            <h2>My Borrowing Requests</h2>
+            <p>Check the status of your requests.</p>
+          </div>
 
-          {!activeStudentId ? (
-            <p className="student-empty">
-              Enter your student ID to view your requests.
-            </p>
-          ) : borrowings.length === 0 ? (
-            <p className="student-empty">
-              No borrowing requests found for student ID{" "}
-              {activeStudentId}.
-            </p>
-          ) : (
-            <div className="student-table-wrapper">
-              <table className="student-request-table">
-                <thead>
-                  <tr>
-                    <th>Equipment</th>
-                    <th>Quantity</th>
-                    <th>Borrow Date</th>
-                    <th>Expected Return</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
+          <button
+            type="button"
+            onClick={loadDashboard}
+            disabled={loading}
+          >
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
 
-                <tbody>
-                  {borrowings.map((borrowing) => (
-                    <tr key={borrowing._id}>
-                      <td>{getEquipmentName(borrowing)}</td>
-                      <td>{borrowing.quantity}</td>
-                      <td>
-                        {borrowing.borrowDate
-                          ? new Date(
-                              borrowing.borrowDate
-                            ).toLocaleDateString()
-                          : "—"}
-                      </td>
-                      <td>
-                        {borrowing.expectedReturnDate
-                          ? new Date(
-                              borrowing.expectedReturnDate
-                            ).toLocaleDateString()
-                          : "—"}
-                      </td>
-                      <td>
-                        <span
-                          className={`student-status ${getStatusClass(
-                            borrowing.status
-                          )}`}
-                        >
-                          {borrowing.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <footer className="student-footer">
-          <p>
-            © {new Date().getFullYear()} Schoolrow. School Equipment
-            Borrowing System.
+        {borrowings.length === 0 ? (
+          <p className="empty-state">
+            You have not submitted any borrowing requests yet.
           </p>
-        </footer>
-      </main>
-    </div>
+        ) : (
+          <div className="requests-list">
+            {borrowings.map((item) => {
+              const status = item.status || "Pending";
+
+              return (
+                <article className="request-card" key={item._id}>
+                  <div>
+                    <h3>
+                      {item.equipmentName ||
+                        item.equipmentId?.name ||
+                        "Equipment"}
+                    </h3>
+
+                    <p>Student: {item.studentName}</p>
+                    <p>Student ID: {item.studentId}</p>
+                    <p>Course / Section: {item.courseSection}</p>
+                    <p>Quantity: {item.quantity ?? 1}</p>
+
+                    <p>
+                      Borrow date:{" "}
+                      {item.borrowDate
+                        ? String(item.borrowDate).slice(0, 10)
+                        : "Not specified"}
+                    </p>
+
+                    <p>
+                      Return date:{" "}
+                      {item.expectedReturnDate
+                        ? String(item.expectedReturnDate).slice(0, 10)
+                        : "Not specified"}
+                    </p>
+
+                    {item.purpose && <p>Purpose: {item.purpose}</p>}
+                  </div>
+
+                  <span
+                    className={`status-badge status-${String(
+                      status
+                    ).toLowerCase()}`}
+                  >
+                    {statusIcon(status)} {status}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <footer className="dashboard-footer">
+        <p>Schoolrow Student Borrowing Portal</p>
+      </footer>
+
+      {/* Floating AI assistant */}
+      <AIAssistant role="student" />
+    </main>
   );
 }
+
+export default StudentDashboard;

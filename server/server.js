@@ -7,30 +7,27 @@ const cors = require("cors");
 
 const equipmentRoutes = require("./routes/equipmentRoutes");
 const borrowingRoutes = require("./routes/borrowingRoutes");
+const authRoutes = require("./routes/authRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors({
-    origin: [
-    "http://localhost:5173",
-    "http://localhost:5174"
-  ]
-}));
-app.use(express.json());
-
 app.use(
-  "/api/borrowings",
-  require("./routes/borrowingRoutes")
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+    ],
+  })
 );
 
-// Homepage
+app.use(express.json({ limit: "20kb" }));
+
 app.get("/", (req, res) => {
   res.send("Welcome to Schoolrow API!");
 });
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -38,26 +35,36 @@ app.get("/api/health", (req, res) => {
     database:
       mongoose.connection.readyState === 1
         ? "connected"
-        : "disconnected"
+        : "disconnected",
   });
 });
 
-// Register routes
 app.use("/api/equipment", equipmentRoutes);
 app.use("/api/borrowings", borrowingRoutes);
-app.use("/api/equipment", require("./routes/equipmentRoutes"));
-// Unknown route
+app.use("/api/auth", authRoutes);
+
+// AI assistant endpoint
+app.use("/api/ai", aiRoutes);
+
+// Keep this after all registered routes
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: "API endpoint not found."
+    message: "API endpoint not found.",
   });
 });
 
-// Start after MongoDB connects
 async function startServer() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    const mongoUri = process.env.MONGODB_URI;
+
+    if (!mongoUri) {
+      throw new Error(
+        "MONGODB_URI is missing. Check the server/.env file."
+      );
+    }
+
+    await mongoose.connect(mongoUri);
 
     console.log("MongoDB connected successfully.");
 
@@ -67,7 +74,7 @@ async function startServer() {
       );
     });
   } catch (error) {
-    console.error("MongoDB connection failed:", error.message);
+    console.error("Server startup failed:", error.message);
     process.exit(1);
   }
 }

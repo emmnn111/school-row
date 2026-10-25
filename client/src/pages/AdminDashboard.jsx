@@ -1,703 +1,1011 @@
 
-import "../App.css";
-import {
-  BookOpen, LayoutDashboard, Package, ClipboardList, Search,
-  RefreshCw, Plus, Pencil, Trash2, X, Save, HandHelping
-} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import "./AdminDashboard.css";
 
 const API_URL = "http://localhost:5000/api";
 
-const emptyForm = {
+const INITIAL_FORM = {
   name: "",
   assetCode: "",
   category: "",
-  description: "",
-  quantityTotal: "1",
-  quantityAvailable: "1",
+  location: "",
+  quantityTotal: 1,
+  quantityAvailable: 1,
   condition: "Good",
-  location: "Sports Equipment Room"
+  description: "",
 };
 
-function localDate() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const NAV_ITEMS = [
+  { id: "overview", label: "Dashboard" },
+  { id: "equipment", label: "Equipment" },
+  { id: "add", label: "Add Equipment" },
+  { id: "borrowings", label: "Borrowing Requests" },
+];
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 }
 
-function emptyBorrowForm() {
-  const today = localDate();
-  return {
-    studentName: "",
-    studentId: "",
-    courseSection: "",
-    equipmentId: "",
-    quantity: "1",
-    borrowDate: today,
-    expectedReturnDate: today,
-    purpose: ""
+function getStatusClass(status) {
+  const classes = {
+    Pending: "status-pending",
+    Approved: "status-approved",
+    Borrowed: "status-borrowed",
+    Returned: "status-returned",
+    Rejected: "status-rejected",
   };
+
+  return classes[status] || "status-default";
 }
 
-function App() {
+export default function AdminDashboard() {
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState("overview");
   const [equipment, setEquipment] = useState([]);
   const [borrowings, setBorrowings] = useState([]);
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [form, setForm] = useState({ ...INITIAL_FORM });
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState(emptyForm);
+  const token = localStorage.getItem("schoolrowToken");
 
-  const [showBorrowForm, setShowBorrowForm] = useState(false);
-  const [borrowData, setBorrowData] = useState(emptyBorrowForm);
-  const [borrowSaving, setBorrowSaving] = useState(false);
-  const [statusUpdating, setStatusUpdating] = useState(null);
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
 
-  async function loadData() {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [equipmentResponse, borrowingResponse] = await Promise.all([
-        fetch(`${API_URL}/equipment`),
-        fetch(`${API_URL}/borrowings`)
-      ]);
-
-      if (!equipmentResponse.ok || !borrowingResponse.ok) {
-        throw new Error("Server request failed.");
+      if (!token) {
+        navigate("/", { replace: true });
+        return;
       }
 
-      const equipmentResult = await equipmentResponse.json();
-      const borrowingResult = await borrowingResponse.json();
+      const meResponse = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const meData = await meResponse.json();
+
+      if (!meResponse.ok || meData.role !== "admin") {
+        localStorage.removeItem("schoolrowToken");
+        localStorage.removeItem("schoolrowRole");
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const [equipmentResponse, borrowingResponse] = await Promise.all([
+        fetch(`${API_URL}/equipment`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_URL}/borrowings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const [equipmentData, borrowingData] = await Promise.all([
+        equipmentResponse.json(),
+        borrowingResponse.json(),
+      ]);
+
+      if (!equipmentResponse.ok) {
+        throw new Error(
+          equipmentData.message || "Could not load equipment."
+        );
+      }
+
+      if (!borrowingResponse.ok) {
+        throw new Error(
+          borrowingData.message || "Could not load borrowing requests."
+        );
+      }
 
       setEquipment(
-        Array.isArray(equipmentResult)
-          ? equipmentResult
-          : equipmentResult.data || equipmentResult.equipment || []
+        Array.isArray(equipmentData)
+          ? equipmentData
+          : equipmentData.data || equipmentData.equipment || []
       );
 
       setBorrowings(
-        Array.isArray(borrowingResult)
-          ? borrowingResult
-          : borrowingResult.data || borrowingResult.borrowings || []
+        Array.isArray(borrowingData)
+          ? borrowingData
+          : borrowingData.data || borrowingData.borrowings || []
       );
     } catch (err) {
-      setError(
-        "Cannot connect to the server. Make sure MongoDB and the backend are running."
-      );
+      setError(err.message || "Unable to load dashboard.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [navigate, token]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadDashboard();
+  }, [loadDashboard]);
 
-  // EQUIPMENT FUNCTIONS
-
-  function openAddForm() {
-    setEditingId(null);
-    setFormData({ ...emptyForm });
-    setError("");
-    setNotice("");
-    setShowForm(true);
+  function logout() {
+    localStorage.removeItem("schoolrowToken");
+    localStorage.removeItem("schoolrowRole");
+    navigate("/", { replace: true });
   }
 
-  function openEditForm(item) {
-    setEditingId(item._id);
-    setFormData({
-      name: item.name || "",
-      assetCode: item.assetCode || "",
-      category: item.category || "",
-      description: item.description || "",
-      quantityTotal: String(item.quantityTotal ?? 0),
-      quantityAvailable: String(item.quantityAvailable ?? 0),
-      condition: item.condition || "Good",
-      location: item.location || ""
-    });
+  function selectTab(tab) {
+    setActiveTab(tab);
+    setSearch("");
     setError("");
     setNotice("");
-    setShowForm(true);
   }
 
-  function handleInputChange(event) {
+  function updateForm(event) {
     const { name, value } = event.target;
-    setFormData(previous => ({ ...previous, [name]: value }));
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: ["quantityTotal", "quantityAvailable"].includes(name)
+        ? value === ""
+          ? ""
+          : Number(value)
+        : value,
+    }));
   }
 
-  async function handleSubmit(event) {
+  function resetForm() {
+    setForm({ ...INITIAL_FORM });
+  }
+
+  async function addEquipment(event) {
     event.preventDefault();
     setError("");
     setNotice("");
 
-    const total = Number(formData.quantityTotal);
-    const available = Number(formData.quantityAvailable);
-
     if (
-      !formData.name.trim() ||
-      !formData.assetCode.trim() ||
-      !formData.category.trim()
+      !form.name.trim() ||
+      !form.assetCode.trim() ||
+      !form.category.trim() ||
+      !form.location.trim()
     ) {
-      setError("Name, asset code, and category are required.");
+      setError("Please fill in all required equipment fields.");
       return;
     }
 
     if (
-      !Number.isInteger(total) ||
-      !Number.isInteger(available) ||
-      total < 0 ||
-      available < 0 ||
-      available > total
+      !Number.isInteger(Number(form.quantityTotal)) ||
+      !Number.isInteger(Number(form.quantityAvailable)) ||
+      Number(form.quantityTotal) < 1 ||
+      Number(form.quantityAvailable) < 0 ||
+      Number(form.quantityAvailable) > Number(form.quantityTotal)
     ) {
-      setError("Enter valid quantities. Available quantity cannot exceed total quantity.");
+      setError("Please enter valid equipment quantities.");
       return;
     }
-
-    const payload = {
-      ...formData,
-      name: formData.name.trim(),
-      assetCode: formData.assetCode.trim(),
-      category: formData.category.trim(),
-      description: formData.description.trim(),
-      location: formData.location.trim(),
-      quantityTotal: total,
-      quantityAvailable: available
-    };
 
     setSaving(true);
 
     try {
-      const response = await fetch(
-        editingId
-          ? `${API_URL}/equipment/${editingId}`
-          : `${API_URL}/equipment`,
-        {
-          method: editingId ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
-      );
+      const response = await fetch(`${API_URL}/equipment`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          ...form,
+          quantityTotal: Number(form.quantityTotal),
+          quantityAvailable: Number(form.quantityAvailable),
+        }),
+      });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Unable to save equipment.");
+        throw new Error(data.message || "Failed to add equipment.");
       }
 
-      const message = editingId
-        ? "Equipment updated successfully."
-        : "Equipment added successfully.";
-
-      setShowForm(false);
-      setEditingId(null);
-      setNotice(message);
-      await loadData();
+      setNotice("Equipment added successfully.");
+      resetForm();
+      setActiveTab("equipment");
+      await loadDashboard();
     } catch (err) {
-      setError(err.message || "Unable to save equipment.");
+      setError(err.message || "Failed to add equipment.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(item) {
-    const confirmed = window.confirm(
-      `Delete "${item.name}" (${item.assetCode})?`
-    );
+  async function deleteEquipment(item) {
+    const id = item._id || item.id;
 
-    if (!confirmed) return;
+    if (!id) {
+      setError("Equipment ID is missing.");
+      return;
+    }
+
+    if (!window.confirm(`Delete "${item.name}"?`)) return;
 
     setError("");
     setNotice("");
 
     try {
-      const response = await fetch(
-        `${API_URL}/equipment/${item._id}`,
-        { method: "DELETE" }
-      );
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Unable to delete equipment.");
-      }
-
-      setNotice(`${item.name} was deleted successfully.`);
-      await loadData();
-    } catch (err) {
-      setError(err.message || "Unable to delete equipment.");
-    }
-  }
-
-  // BORROWING FUNCTIONS
-
-  function openBorrowForm() {
-    setBorrowData(emptyBorrowForm());
-    setError("");
-    setNotice("");
-    setShowBorrowForm(true);
-  }
-
-  function handleBorrowInputChange(event) {
-    const { name, value } = event.target;
-    setBorrowData(previous => ({ ...previous, [name]: value }));
-  }
-
-  async function handleBorrowSubmit(event) {
-    event.preventDefault();
-    setError("");
-    setNotice("");
-
-    if (
-      !borrowData.studentName.trim() ||
-      !borrowData.studentId.trim() ||
-      !borrowData.courseSection.trim() ||
-      !borrowData.equipmentId ||
-      !borrowData.purpose.trim()
-    ) {
-      setError("Please complete all borrowing form fields.");
-      return;
-    }
-
-    const quantity = Number(borrowData.quantity);
-    const selectedEquipment = equipment.find(
-      item => item._id === borrowData.equipmentId
-    );
-
-    if (!selectedEquipment) {
-      setError("Please select valid equipment.");
-      return;
-    }
-
-    if (
-      !Number.isInteger(quantity) ||
-      quantity < 1 ||
-      quantity > Number(selectedEquipment.quantityAvailable)
-    ) {
-      setError(
-        `Enter a quantity between 1 and ${selectedEquipment.quantityAvailable}.`
-      );
-      return;
-    }
-
-    if (
-      !borrowData.borrowDate ||
-      !borrowData.expectedReturnDate ||
-      borrowData.expectedReturnDate < borrowData.borrowDate
-    ) {
-      setError("The expected return date must be on or after the borrow date.");
-      return;
-    }
-
-    setBorrowSaving(true);
-
-    try {
-      const response = await fetch(`${API_URL}/borrowings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...borrowData,
-          studentName: borrowData.studentName.trim(),
-          studentId: borrowData.studentId.trim(),
-          courseSection: borrowData.courseSection.trim(),
-          purpose: borrowData.purpose.trim(),
-          quantity
-        })
+      const response = await fetch(`${API_URL}/equipment/${id}`, {
+        method: "DELETE",
+        headers: authHeaders,
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Unable to submit request.");
+        throw new Error(data.message || "Failed to delete equipment.");
       }
 
-      setShowBorrowForm(false);
-      setBorrowData(emptyBorrowForm());
-      setNotice("Borrowing request submitted! Status: Pending.");
-      await loadData();
+      setNotice("Equipment deleted successfully.");
+      await loadDashboard();
     } catch (err) {
-      setError(err.message || "Unable to submit borrowing request.");
-    } finally {
-      setBorrowSaving(false);
+      setError(err.message || "Failed to delete equipment.");
     }
   }
 
-  async function updateBorrowingStatus(record, status) {
-    const messages = {
-      Approved: "Approve this request and reserve the equipment quantity?",
-      Rejected: "Reject this borrowing request?",
-      Borrowed: "Confirm that the equipment has been handed to the student?",
-      Returned: "Confirm that the equipment has been returned?"
-    };
+  async function changeBorrowingStatus(request, status) {
+    const id = request._id || request.id;
 
-    if (!window.confirm(messages[status] || `Change status to ${status}?`)) {
-      return;
-    }
+    if (!id || saving) return;
 
+    setSaving(true);
     setError("");
     setNotice("");
-    setStatusUpdating(record._id);
 
     try {
       const response = await fetch(
-        `${API_URL}/borrowings/${record._id}/status`,
+        `${API_URL}/borrowings/${id}/status`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status })
+          headers: authHeaders,
+          body: JSON.stringify({ status }),
         }
       );
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Unable to update request.");
+        throw new Error(
+          data.message || "Could not update borrowing status."
+        );
       }
 
-      setNotice(result.message || `Request updated to ${status}.`);
-      await loadData();
+      setSelectedRequest(null);
+      setNotice(
+        status === "Approved"
+          ? "Borrowing request approved successfully."
+          : "Borrowing request rejected."
+      );
+
+      await loadDashboard();
     } catch (err) {
-      setError(err.message || "Unable to update borrowing status.");
+      setError(err.message || "Could not update borrowing status.");
     } finally {
-      setStatusUpdating(null);
+      setSaving(false);
     }
   }
 
-  const filteredEquipment = equipment.filter(item =>
-    `${item.name || ""} ${item.assetCode || ""} ${item.category || ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
-
-  const availableQuantity = equipment.reduce(
-    (total, item) => total + Number(item.quantityAvailable || 0),
-    0
-  );
-
-  const activeBorrowings = borrowings.filter(item =>
-    ["pending", "approved", "borrowed"].includes(
-      String(item.status || "").toLowerCase()
-    )
+  const pendingCount = borrowings.filter(
+    (item) => item.status === "Pending"
   ).length;
 
+  const approvedCount = borrowings.filter(
+    (item) => item.status === "Approved"
+  ).length;
+
+  const borrowedCount = borrowings.filter(
+    (item) => item.status === "Borrowed"
+  ).length;
+
+  const filteredEquipment = equipment.filter((item) => {
+    const text = [
+      item.name,
+      item.assetCode,
+      item.category,
+      item.location,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes(search.toLowerCase());
+  });
+
+  const filteredBorrowings = borrowings.filter((item) => {
+    const text = [
+      item.studentName,
+      item.studentId,
+      item.purpose,
+      item.status,
+      item.equipmentId?.name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes(search.toLowerCase());
+  });
+
+  function detail(label, value) {
+    return (
+      <div className="detail-row" key={label}>
+        <strong>{label}</strong>
+        <span>{value || "Not provided"}</span>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="admin-loading">
+        <div className="loading-spinner" />
+        <p>Loading Schoolrow admin dashboard...</p>
+      </main>
+    );
+  }
+
   return (
-    <div className="app-layout">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-icon"><BookOpen size={25} /></div>
+    <div className="admin-dashboard">
+      <header className="admin-header">
+        <div className="admin-brand">
+          <div className="admin-brand-logo">S</div>
           <div>
             <h2>Schoolrow</h2>
-            <p>Equipment Borrowing</p>
+            <small>Administrator Dashboard</small>
           </div>
         </div>
 
-        <p className="menu-label">MAIN MENU</p>
-        <nav className="navigation">
-          <a href="#dashboard" className="nav-item active">
-            <LayoutDashboard size={19} /> Dashboard
-          </a>
-          <a href="#equipment" className="nav-item">
-            <Package size={19} /> Equipment
-          </a>
-          <a href="#borrowings" className="nav-item">
-            <ClipboardList size={19} /> Borrowing Records
-          </a>
-        </nav>
+        <button
+          type="button"
+          className="button button-danger"
+          onClick={logout}
+        >
+          Log out
+        </button>
+      </header>
 
-        <div className="sidebar-footer">
-          <span className="status-dot" /> Schoolrow System
-        </div>
-      </aside>
+      <div className="admin-layout">
+        <aside className="admin-sidebar">
+          <p className="sidebar-label">MAIN MENU</p>
 
-      <main className="main-content" id="dashboard">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">SCHOOL EQUIPMENT MANAGEMENT</p>
-            <h1>Dashboard</h1>
-            <p className="welcome-text">
-              Overview of your school equipment and borrowing records.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="refresh-button"
-            onClick={loadData}
-            disabled={loading}
-          >
-            <RefreshCw size={17} /> Refresh
-          </button>
-        </header>
-
-        {error && <div className="error-message">{error}</div>}
-        {notice && <div className="success-message">{notice}</div>}
-
-        <section className="stats-grid">
-          <article className="stat-card">
-            <div className="stat-icon purple"><Package size={22} /></div>
-            <p>Total Equipment Types</p>
-            <h2>{equipment.length}</h2>
-            <span>Registered equipment items</span>
-          </article>
-          <article className="stat-card">
-            <div className="stat-icon green"><BookOpen size={22} /></div>
-            <p>Available Quantity</p>
-            <h2>{availableQuantity}</h2>
-            <span>Units available to borrow</span>
-          </article>
-          <article className="stat-card">
-            <div className="stat-icon orange"><ClipboardList size={22} /></div>
-            <p>Total Borrowing Records</p>
-            <h2>{borrowings.length}</h2>
-            <span>All recorded requests</span>
-          </article>
-          <article className="stat-card">
-            <div className="stat-icon blue"><RefreshCw size={22} /></div>
-            <p>Active Borrowings</p>
-            <h2>{activeBorrowings}</h2>
-            <span>Pending, approved, or borrowed</span>
-          </article>
-        </section>
-
-        <section className="content-card" id="equipment">
-          <div className="section-heading">
-            <div>
-              <h2>Equipment Inventory</h2>
-              <p>View and manage school equipment.</p>
-            </div>
-            <div className="inventory-controls">
-              <label className="search-box">
-                <Search size={18} />
-                <input
-                  type="search"
-                  placeholder="Search equipment..."
-                  value={search}
-                  onChange={event => setSearch(event.target.value)}
-                />
-              </label>
-              <button className="add-button" type="button" onClick={openAddForm}>
-                <Plus size={18} /> Add Equipment
-              </button>
-            </div>
-          </div>
-
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Equipment</th><th>Asset Code</th><th>Category</th>
-                  <th>Available</th><th>Condition</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan="6" className="empty-state">Loading equipment...</td></tr>
-                ) : filteredEquipment.length === 0 ? (
-                  <tr><td colSpan="6" className="empty-state">No equipment found.</td></tr>
-                ) : filteredEquipment.map(item => (
-                  <tr key={item._id}>
-                    <td className="equipment-name">{item.name}</td>
-                    <td>{item.assetCode}</td>
-                    <td>{item.category}</td>
-                    <td>{item.quantityAvailable} / {item.quantityTotal}</td>
-                    <td>
-                      <span className={`condition-badge ${String(item.condition || "Good").toLowerCase()}`}>
-                        {item.condition || "Good"}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button className="edit-button" type="button" onClick={() => openEditForm(item)}>
-                          <Pencil size={16} /> Edit
-                        </button>
-                        <button className="delete-button" type="button" onClick={() => handleDelete(item)}>
-                          <Trash2 size={16} /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="content-card" id="borrowings">
-          <div className="section-heading">
-            <div>
-              <h2>Borrowing Records</h2>
-              <p>Submit requests and manage equipment loans.</p>
-            </div>
+          {NAV_ITEMS.map((item) => (
             <button
-              className="add-button"
               type="button"
-              onClick={openBorrowForm}
-              disabled={equipment.every(item => item.quantityAvailable < 1 || item.condition === "Damaged")}
+              key={item.id}
+              className={`nav-item ${
+                activeTab === item.id ? "active" : ""
+              }`}
+              onClick={() => selectTab(item.id)}
             >
-              <HandHelping size={18} /> Borrow Equipment
+              <span className="nav-indicator" />
+              {item.label}
+              {item.id === "borrowings" && pendingCount > 0 && (
+                <span className="nav-count">{pendingCount}</span>
+              )}
+            </button>
+          ))}
+
+          <div className="sidebar-bottom">
+            <span className="admin-avatar">A</span>
+            <div>
+              <strong>Administrator</strong>
+              <small>Schoolrow Admin</small>
+            </div>
+          </div>
+        </aside>
+
+        <main className="admin-content">
+          <div className="page-heading">
+            <div>
+              <p className="page-eyebrow">SCHOOLROW MANAGEMENT</p>
+              <h1>
+                {
+                  {
+                    overview: "Dashboard Overview",
+                    equipment: "Equipment Inventory",
+                    add: "Add Equipment",
+                    borrowings: "Borrowing Requests",
+                  }[activeTab]
+                }
+              </h1>
+              <p className="page-description">
+                {
+                  {
+                    overview: "Monitor equipment and borrowing activity.",
+                    equipment: "View and manage school equipment.",
+                    add: "Add equipment to the school inventory.",
+                    borrowings: "Review student equipment requests.",
+                  }[activeTab]
+                }
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="button button-secondary refresh-button"
+              onClick={loadDashboard}
+            >
+              ↻ Refresh
             </button>
           </div>
 
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th><th>Student ID</th><th>Equipment</th>
-                  <th>Quantity</th><th>Borrow Date</th><th>Status</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan="7" className="empty-state">Loading borrowing records...</td></tr>
-                ) : borrowings.length === 0 ? (
-                  <tr><td colSpan="7" className="empty-state">No borrowing records yet.</td></tr>
-                ) : borrowings.map(record => {
-                  const equipmentName =
-                    record.equipmentId && typeof record.equipmentId === "object"
-                      ? record.equipmentId.name
-                      : equipment.find(item => item._id === record.equipmentId)?.name;
+          {error && (
+            <div className="alert alert-error" role="alert">
+              <span>!</span>
+              {error}
+              <button
+                type="button"
+                className="alert-close"
+                aria-label="Dismiss error"
+                onClick={() => setError("")}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
-                  const status = record.status || "Pending";
-                  const busy = statusUpdating === record._id;
+          {notice && (
+            <div className="alert alert-success" role="status">
+              <span>✓</span>
+              {notice}
+              <button
+                type="button"
+                className="alert-close"
+                aria-label="Dismiss message"
+                onClick={() => setNotice("")}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
-                  return (
-                    <tr key={record._id}>
-                      <td className="equipment-name">{record.studentName || "Unknown student"}</td>
-                      <td>{record.studentId || "—"}</td>
-                      <td>{equipmentName || "Equipment unavailable"}</td>
-                      <td>{record.quantity ?? 1}</td>
-                      <td>{record.borrowDate ? new Date(record.borrowDate).toLocaleDateString() : "—"}</td>
-                      <td>
-                        <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          {status === "Pending" && (
-                            <>
-                              <button className="edit-button" type="button" disabled={busy} onClick={() => updateBorrowingStatus(record, "Approved")}>Approve</button>
-                              <button className="delete-button" type="button" disabled={busy} onClick={() => updateBorrowingStatus(record, "Rejected")}>Reject</button>
-                            </>
-                          )}
-                          {status === "Approved" && (
-                            <>
-                              <button className="edit-button" type="button" disabled={busy} onClick={() => updateBorrowingStatus(record, "Borrowed")}>Mark Borrowed</button>
-                              <button className="delete-button" type="button" disabled={busy} onClick={() => updateBorrowingStatus(record, "Rejected")}>Reject</button>
-                            </>
-                          )}
-                          {status === "Borrowed" && (
-                            <button className="add-button" type="button" disabled={busy} onClick={() => updateBorrowingStatus(record, "Returned")}>Mark Returned</button>
-                          )}
-                          {busy && <span>Updating...</span>}
-                          {["Returned", "Rejected"].includes(status) && <span>Completed</span>}
-                        </div>
-                      </td>
+          {activeTab === "overview" && (
+            <>
+              <div className="summary-grid">
+                <section className="summary-card summary-teal">
+                  <div className="summary-icon">▣</div>
+                  <p>Equipment Types</p>
+                  <h2>{equipment.length}</h2>
+                  <small>Items in inventory</small>
+                </section>
+
+                <section className="summary-card summary-blue">
+                  <div className="summary-icon">▤</div>
+                  <p>Borrowing Requests</p>
+                  <h2>{borrowings.length}</h2>
+                  <small>Total requests</small>
+                </section>
+
+                <section className="summary-card summary-orange">
+                  <div className="summary-icon">◷</div>
+                  <p>Pending Requests</p>
+                  <h2>{pendingCount}</h2>
+                  <small>Awaiting your decision</small>
+                </section>
+
+                <section className="summary-card summary-green">
+                  <div className="summary-icon">✓</div>
+                  <p>Approved</p>
+                  <h2>{approvedCount}</h2>
+                  <small>Approved requests</small>
+                </section>
+
+                <section className="summary-card summary-purple">
+                  <div className="summary-icon">↗</div>
+                  <p>Currently Borrowed</p>
+                  <h2>{borrowedCount}</h2>
+                  <small>Active borrowings</small>
+                </section>
+              </div>
+
+              <section className="panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Recent Borrowing Requests</h3>
+                    <p>Latest equipment requests from students.</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={() => selectTab("borrowings")}
+                  >
+                    View All Requests →
+                  </button>
+                </div>
+
+                {borrowings.length === 0 ? (
+                  <div className="empty-state">
+                    <span className="empty-icon">▤</span>
+                    <h3>No requests yet</h3>
+                    <p>Student borrowing requests will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Equipment</th>
+                          <th>Borrow Date</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {borrowings.slice(0, 5).map((item) => (
+                          <tr key={item._id || item.id}>
+                            <td>
+                              <strong>{item.studentName || "Student"}</strong>
+                              <small className="table-subtext">
+                                {item.studentId || "—"}
+                              </small>
+                            </td>
+                            <td>{item.equipmentId?.name || "Equipment"}</td>
+                            <td>{formatDate(item.borrowDate)}</td>
+                            <td>
+                              <span
+                                className={`status-badge ${getStatusClass(
+                                  item.status
+                                )}`}
+                              >
+                                {item.status || "Unknown"}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="button button-small button-outline"
+                                onClick={() => {
+                                  setSelectedRequest(item);
+                                  setError("");
+                                  setNotice("");
+                                }}
+                              >
+                                Details
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeTab === "equipment" && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Equipment Inventory</h3>
+                  <p>
+                    {equipment.length} equipment record
+                    {equipment.length === 1 ? "" : "s"} in the system.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={() => selectTab("add")}
+                >
+                  + Add Equipment
+                </button>
+              </div>
+
+              <div className="search-box">
+                <span>⌕</span>
+                <input
+                  aria-label="Search equipment"
+                  placeholder="Search name, asset code, category, or location..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Equipment</th>
+                      <th>Asset Code</th>
+                      <th>Category</th>
+                      <th>Availability</th>
+                      <th>Condition</th>
+                      <th>Action</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <footer className="page-footer">Schoolrow · School Equipment Borrowing System</footer>
-      </main>
-
-      {showForm && (
-        <div className="modal-overlay">
-          <section className="equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-form-title">
-            <div className="modal-heading">
-              <div>
-                <h2 id="equipment-form-title">{editingId ? "Edit Equipment" : "Add Equipment"}</h2>
-                <p>Enter the equipment details below.</p>
-              </div>
-              <button className="close-button" type="button" onClick={() => !saving && setShowForm(false)} disabled={saving}><X size={21} /></button>
-            </div>
-
-            <form className="equipment-form" onSubmit={handleSubmit}>
-              {error && <div className="error-message">{error}</div>}
-              <div className="form-grid">
-                <label>Equipment Name *<input name="name" value={formData.name} onChange={handleInputChange} required /></label>
-                <label>Asset Code *<input name="assetCode" value={formData.assetCode} onChange={handleInputChange} required /></label>
-                <label>Category *<input name="category" value={formData.category} onChange={handleInputChange} required /></label>
-                <label>Condition
-                  <select name="condition" value={formData.condition} onChange={handleInputChange}>
-                    <option>Good</option><option>Fair</option><option>Damaged</option>
-                  </select>
-                </label>
-                <label>Total Quantity *<input type="number" name="quantityTotal" min="0" step="1" value={formData.quantityTotal} onChange={handleInputChange} required /></label>
-                <label>Available Quantity *<input type="number" name="quantityAvailable" min="0" step="1" value={formData.quantityAvailable} onChange={handleInputChange} required /></label>
-                <label className="full-width">Storage Location<input name="location" value={formData.location} onChange={handleInputChange} /></label>
-                <label className="full-width">Description<textarea name="description" value={formData.description} onChange={handleInputChange} rows="3" /></label>
-              </div>
-              <div className="modal-actions">
-                <button className="cancel-button" type="button" onClick={() => !saving && setShowForm(false)} disabled={saving}>Cancel</button>
-                <button className="add-button" type="submit" disabled={saving}><Save size={17} />{saving ? "Saving..." : editingId ? "Save Changes" : "Add Equipment"}</button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-
-      {showBorrowForm && (
-        <div className="modal-overlay">
-          <section className="equipment-modal" role="dialog" aria-modal="true" aria-labelledby="borrow-form-title">
-            <div className="modal-heading">
-              <div>
-                <h2 id="borrow-form-title">Borrow Equipment</h2>
-                <p>Submit a request for school equipment.</p>
-              </div>
-              <button className="close-button" type="button" disabled={borrowSaving} onClick={() => setShowBorrowForm(false)}><X size={21} /></button>
-            </div>
-
-            <form className="equipment-form" onSubmit={handleBorrowSubmit}>
-              {error && <div className="error-message">{error}</div>}
-              <div className="form-grid">
-                <label>Student Name *
-                  <input name="studentName" value={borrowData.studentName} onChange={handleBorrowInputChange} required />
-                </label>
-                <label>Student ID *
-                  <input name="studentId" value={borrowData.studentId} onChange={handleBorrowInputChange} required />
-                </label>
-                <label className="full-width">Course / Section *
-                  <input name="courseSection" value={borrowData.courseSection} onChange={handleBorrowInputChange} placeholder="e.g. BSIT 2A" required />
-                </label>
-                <label className="full-width">Equipment *
-                  <select name="equipmentId" value={borrowData.equipmentId} onChange={handleBorrowInputChange} required>
-                    <option value="">Select equipment</option>
-                    {equipment.filter(item => item.quantityAvailable > 0 && item.condition !== "Damaged").map(item => (
-                      <option key={item._id} value={item._id}>
-                        {item.name} ({item.assetCode}) — {item.quantityAvailable} available
-                      </option>
+                  </thead>
+                  <tbody>
+                    {filteredEquipment.map((item) => (
+                      <tr key={item._id || item.id}>
+                        <td>
+                          <strong>{item.name}</strong>
+                          <small className="table-subtext">
+                            {item.location || "No location"}
+                          </small>
+                        </td>
+                        <td>{item.assetCode}</td>
+                        <td>{item.category}</td>
+                        <td>
+                          <strong>{item.quantityAvailable ?? "—"}</strong>
+                          <span className="quantity-total">
+                            {" "}
+                            / {item.quantityTotal ?? "—"}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`condition-badge ${
+                              item.condition === "Good"
+                                ? "condition-good"
+                                : item.condition === "Damaged"
+                                  ? "condition-damaged"
+                                  : "condition-other"
+                            }`}
+                          >
+                            {item.condition || "Unknown"}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="button button-small button-danger-light"
+                            onClick={() => deleteEquipment(item)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
                     ))}
-                  </select>
-                </label>
-                <label>Quantity *
-                  <input type="number" name="quantity" min="1" step="1" max={equipment.find(item => item._id === borrowData.equipmentId)?.quantityAvailable || 1} value={borrowData.quantity} onChange={handleBorrowInputChange} required />
-                </label>
-                <label>Borrow Date *
-                  <input type="date" name="borrowDate" value={borrowData.borrowDate} onChange={handleBorrowInputChange} required />
-                </label>
-                <label className="full-width">Expected Return Date *
-                  <input type="date" name="expectedReturnDate" min={borrowData.borrowDate} value={borrowData.expectedReturnDate} onChange={handleBorrowInputChange} required />
-                </label>
-                <label className="full-width">Purpose *
-                  <textarea name="purpose" value={borrowData.purpose} onChange={handleBorrowInputChange} placeholder="Explain why you need this equipment..." rows="3" required />
-                </label>
+
+                    {filteredEquipment.length === 0 && (
+                      <tr>
+                        <td colSpan="6">
+                          <div className="empty-state">
+                            <h3>No equipment found</h3>
+                            <p>Try a different search or add equipment.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <p className="form-help">Your request will be saved as Pending until it is reviewed.</p>
-              <div className="modal-actions">
-                <button className="cancel-button" type="button" onClick={() => !borrowSaving && setShowBorrowForm(false)} disabled={borrowSaving}>Cancel</button>
-                <button className="add-button" type="submit" disabled={borrowSaving}>{borrowSaving ? "Submitting..." : "Submit Request"}</button>
+            </section>
+          )}
+
+          {activeTab === "add" && (
+            <section className="panel form-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Equipment Information</h3>
+                  <p>Complete the form to register a new item.</p>
+                </div>
               </div>
-            </form>
-          </section>
+
+              <form onSubmit={addEquipment} className="equipment-form">
+                <div className="form-grid">
+                  {[
+                    ["name", "Equipment Name"],
+                    ["assetCode", "Asset Code"],
+                    ["category", "Category"],
+                    ["location", "Location"],
+                  ].map(([name, label]) => (
+                    <label className="form-field" key={name}>
+                      {label} <span className="required-mark">*</span>
+                      <input
+                        name={name}
+                        value={form[name]}
+                        onChange={updateForm}
+                        placeholder={`Enter ${label.toLowerCase()}`}
+                        required
+                      />
+                    </label>
+                  ))}
+
+                  <label className="form-field">
+                    Total Quantity <span className="required-mark">*</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      name="quantityTotal"
+                      value={form.quantityTotal}
+                      onChange={updateForm}
+                      required
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    Available Quantity{" "}
+                    <span className="required-mark">*</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={form.quantityTotal || undefined}
+                      step="1"
+                      name="quantityAvailable"
+                      value={form.quantityAvailable}
+                      onChange={updateForm}
+                      required
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    Condition
+                    <select
+                      name="condition"
+                      value={form.condition}
+                      onChange={updateForm}
+                    >
+                      <option value="Good">Good</option>
+                      <option value="Damaged">Damaged</option>
+                      <option value="Under Maintenance">
+                        Under Maintenance
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="form-field description-field">
+                  Description
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={updateForm}
+                    placeholder="Enter additional equipment details..."
+                    rows="4"
+                  />
+                </label>
+
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={resetForm}
+                    disabled={saving}
+                  >
+                    Clear Form
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="button button-primary"
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save Equipment →"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {activeTab === "borrowings" && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>All Borrowing Requests</h3>
+                  <p>Review and manage student requests.</p>
+                </div>
+
+                <span className="request-total">
+                  {filteredBorrowings.length} request
+                  {filteredBorrowings.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="search-box">
+                <span>⌕</span>
+                <input
+                  aria-label="Search borrowing requests"
+                  placeholder="Search student, ID, purpose, equipment, or status..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Equipment</th>
+                      <th>Quantity</th>
+                      <th>Borrow Date</th>
+                      <th>Return Date</th>
+                      <th>Status</th>
+                      <th>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBorrowings.map((item) => (
+                      <tr key={item._id || item.id}>
+                        <td>
+                          <strong>{item.studentName || "Student"}</strong>
+                          <small className="table-subtext">
+                            {item.studentId || "—"}
+                          </small>
+                        </td>
+                        <td>{item.equipmentId?.name || "Equipment"}</td>
+                        <td>{item.quantity ?? "—"}</td>
+                        <td>{formatDate(item.borrowDate)}</td>
+                        <td>{formatDate(item.expectedReturnDate)}</td>
+                        <td>
+                          <span
+                            className={`status-badge ${getStatusClass(
+                              item.status
+                            )}`}
+                          >
+                            {item.status || "Unknown"}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="button button-small button-outline"
+                            onClick={() => {
+                              setSelectedRequest(item);
+                              setError("");
+                              setNotice("");
+                            }}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {filteredBorrowings.length === 0 && (
+                      <tr>
+                        <td colSpan="7">
+                          <div className="empty-state">
+                            <h3>No requests found</h3>
+                            <p>Try changing your search keywords.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </main>
+      </div>
+
+      <footer className="admin-footer">
+        Schoolrow Equipment Borrowing System
+        <span>Administrator Portal</span>
+      </footer>
+
+      {selectedRequest && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            if (!saving) setSelectedRequest(null);
+          }}
+        >
+          <div
+            className="request-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="page-eyebrow">REQUEST REVIEW</p>
+                <h2 id="request-modal-title">Borrowing Request Details</h2>
+                <p>Review the information before making a decision.</p>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="Close details"
+                disabled={saving}
+                onClick={() => setSelectedRequest(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-status">
+              <span
+                className={`status-badge ${getStatusClass(
+                  selectedRequest.status
+                )}`}
+              >
+                {selectedRequest.status || "Unknown"}
+              </span>
+            </div>
+
+            <section className="detail-section">
+              <h3>Student Information</h3>
+              {detail("Student Name", selectedRequest.studentName)}
+              {detail("Student ID", selectedRequest.studentId)}
+              {detail("Course / Section", selectedRequest.courseSection)}
+            </section>
+
+            <section className="detail-section">
+              <h3>Equipment Information</h3>
+              {detail(
+                "Equipment",
+                selectedRequest.equipmentId?.name || "Equipment"
+              )}
+              {detail(
+                "Asset Code",
+                selectedRequest.equipmentId?.assetCode
+              )}
+              {detail("Quantity", selectedRequest.quantity)}
+            </section>
+
+            <section className="detail-section">
+              <h3>Borrowing Information</h3>
+              {detail("Borrow Date", formatDate(selectedRequest.borrowDate))}
+              {detail(
+                "Expected Return",
+                formatDate(selectedRequest.expectedReturnDate)
+              )}
+              {detail("Purpose", selectedRequest.purpose)}
+            </section>
+
+            {selectedRequest.status === "Pending" && (
+              <div className="modal-note">
+                Approving this request will update its status in the system.
+              </div>
+            )}
+
+            <div className="modal-actions">
+              {selectedRequest.status === "Pending" && (
+                <>
+                  <button
+                    type="button"
+                    className="button button-approve"
+                    disabled={saving}
+                    onClick={() =>
+                      changeBorrowingStatus(selectedRequest, "Approved")
+                    }
+                  >
+                    {saving ? "Processing..." : "✓ Confirm Approval"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="button button-reject"
+                    disabled={saving}
+                    onClick={() =>
+                      changeBorrowingStatus(selectedRequest, "Rejected")
+                    }
+                  >
+                    Reject Request
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                className="button button-secondary"
+                disabled={saving}
+                onClick={() => setSelectedRequest(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
-
-export default App;

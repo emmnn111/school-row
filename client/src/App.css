@@ -1414,3 +1414,726 @@ tbody tr:last-child td {
 .portal-link:hover {
   background: #1d4ed8;
 }
+
+
+/* ===== Schoolrow Student Dashboard ===== */
+
+.student-dashboard {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f4f7fb;
+  color: #1e293b;
+  font-family: Arial, sans-serif;
+}
+
+.student-dashboard * {
+  box-sizing: border-box;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #2563eb;
+}
+
+.dashboard-brand h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.dashboard-brand p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.dashboard-header button,
+.dashboard-section button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dashboard-header button {
+  background: #eaf0ff;
+  color: #1d4ed8;
+}
+
+.dashboard-welcome {
+  margin: 24px 0;
+  padding: 30px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  color: white;
+}
+
+.dashboard-welcome p {
+  margin: 8px 0 0;
+}
+
+.dashboard-welcome h2 {
+  margin: 10px 0;
+  font-size: 28px;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+}
+
+.stat-card > svg {
+  flex-shrink: 0;
+  color: #2563eb;
+}
+
+.stat-card p {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.stat-card h3 {
+  margin: 0;
+  font-size: 25px;
+}
+
+.dashboard-section {
+  margin-bottom: 28px;
+  padding: 24px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-section h2 {
+  margin-top: 0;
+  color: #0f172a;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.section-heading h2 {
+  margin-bottom: 6px;
+}
+
+.section-heading p {
+  margin: 0;
+  color: #64748b;
+}
+
+.equipment-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 300px);
+  padding: 0 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+}
+
+.equipment-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 0;
+  border: none;
+  outline: none;
+}
+
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.equipment-card {
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.equipment-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.09);
+}
+
+.equipment-card > svg {
+  color: #2563eb;
+}
+
+.equipment-card h3 {
+  margin: 14px 0 8px;
+}
+
+.equipment-card p {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.equipment-card button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.borrowing-form {
+  margin-top: 20px;
+}
+
+
+.student-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.student-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.student-info-item label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.student-info-item input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.student-info-item input::placeholder {
+  color: #94a3b8;
+}
+
+.borrowing-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.borrowing-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.borrowing-form .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.borrowing-form input,
+.borrowing-form select,
+.borrowing-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.borrowing-form textarea {
+  resize: vertical;
+}
+
+.borrowing-form .primary-button {
+  margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+  .student-info-grid,
+  .borrowing-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .borrowing-form .form-field.full-width {
+    grid-column: auto;
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.form-field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #1e293b;
+  font: inherit;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: 2px solid #93c5fd;
+  border-color: #2563eb;
+}
+
+.form-field input[readonly] {
+  background: #f1f5f9;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.dashboard-section .primary-button {
+  margin-top: 20px;
+}
+
+.dashboard-section button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.requests-list {
+  display: grid;
+  gap: 14px;
+}
+
+.request-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.request-card h3 {
+  margin: 0 0 10px;
+}
+
+.request-card p {
+  margin: 6px 0;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border-radius: 20px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-approved,
+.status-returned {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.empty-state {
+  padding: 24px;
+  color: #64748b;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.dashboard-alert {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+
+.error-alert {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.success-alert {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dashboard-footer {
+  padding: 18px;
+  color: #64748b;
+  text-align: center;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .equipment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .student-dashboard {
+    padding: 12px;
+  }
+
+  .dashboard-header,
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-welcome {
+    padding: 22px;
+  }
+
+  .dashboard-welcome h2 {
+    font-size: 23px;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-stats,
+  .equipment-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-section {
+    padding: 16px;
+  }
+
+  .equipment-search {
+    width: 100%;
+  }
+
+  .full-width {
+    grid-column: auto;
+  }
+
+  .request-card {
+    flex-direction: column;
+  }
+}
+
+
+.category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.category-filters .category-button {
+  padding: 10px 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 24px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.category-filters .category-button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.equipment-card {
+  overflow: hidden;
+}
+
+.equipment-image {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  background: #e2e8f0;
+}
+
+.equipment-image-placeholder {
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: #eaf0ff;
+  color: #64748b;
+}
+
+
+/* Fix equipment card button clickability */
+.equipment-grid {
+  position: relative;
+  z-index: 1;
+}
+
+.equipment-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.equipment-card button {
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.equipment-card img {
+  pointer-events: none;
+}
+
+
+/* ===== Schoolrow Borrow Equipment Section ===== */
+
+.student-dashboard .dashboard-section:has(.borrowing-form) {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 28px;
+  margin-top: 28px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.student-dashboard .dashboard-section:has(.borrowing-form) > h2 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 25px;
+  font-weight: 750;
+}
+
+.student-dashboard .dashboard-section:has(.borrowing-form) > p {
+  margin: 0 0 22px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Selected equipment banner */
+.student-dashboard .selected-equipment {
+  padding: 14px 16px;
+  margin: 18px 0 24px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 14px;
+}
+
+.student-dashboard .selected-equipment strong {
+  color: #1e40af;
+}
+
+/* Student information and form layout */
+.student-dashboard .borrowing-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.student-dashboard .student-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.student-dashboard .student-info-item,
+.student-dashboard .borrowing-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.student-dashboard .student-info-item label,
+.student-dashboard .borrowing-form .form-field label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-dashboard .student-info-item input,
+.student-dashboard .borrowing-form input,
+.student-dashboard .borrowing-form select,
+.student-dashboard .borrowing-form textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.student-dashboard .student-info-item input::placeholder,
+.student-dashboard .borrowing-form input::placeholder,
+.student-dashboard .borrowing-form textarea::placeholder {
+  color: #94a3b8;
+}
+
+.student-dashboard .borrowing-form input:focus,
+.student-dashboard .borrowing-form select:focus,
+.student-dashboard .borrowing-form textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.student-dashboard .borrowing-form textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.student-dashboard .borrowing-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.student-dashboard .borrowing-form .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Submit button */
+.student-dashboard .borrowing-form .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-width: 190px;
+  padding: 13px 22px;
+  margin-top: 0;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.student-dashboard .borrowing-form .primary-button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.22);
+}
+
+.student-dashboard .borrowing-form .primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive layout */
+@media (max-width: 800px) {
+  .student-dashboard .student-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .student-dashboard .dashboard-section:has(.borrowing-form) {
+    padding: 18px;
+  }
+
+  .student-dashboard .student-info-grid,
+  .student-dashboard .borrowing-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .student-dashboard .borrowing-form .form-field.full-width {
+    grid-column: auto;
+  }
+
+  .student-dashboard .borrowing-form .primary-button {
+    width: 100%;
+  }
+}
+
+.student-dashboard .borrowing-form input[name="quantity"] {
+  pointer-events: auto;
+  user-select: text;
+  cursor: text;
+}
