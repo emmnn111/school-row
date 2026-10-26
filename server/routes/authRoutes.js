@@ -6,10 +6,9 @@ const Student = require("../models/Student");
 
 const router = express.Router();
 
-// CREATE JWT TOKEN
 function createToken(id, role) {
   if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is missing from the server .env file.");
+    throw new Error("JWT_SECRET is missing from server/.env.");
   }
 
   return jwt.sign(
@@ -19,7 +18,7 @@ function createToken(id, role) {
   );
 }
 
-
+// GET /api/auth/me
 router.get("/me", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -31,10 +30,8 @@ router.get("/me", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Return the admin profile for admin tokens.
     if (decoded.role === "admin") {
       return res.json({
         role: "admin",
@@ -45,7 +42,6 @@ router.get("/me", async (req, res) => {
       });
     }
 
-    // Return the student profile for student tokens.
     if (decoded.role !== "student") {
       return res.status(403).json({
         message: "Invalid account role.",
@@ -76,16 +72,21 @@ router.get("/me", async (req, res) => {
   }
 });
 
-
-// =====================================
-// STUDENT REGISTRATION
 // POST /api/auth/register
-// =====================================
 router.post("/register", async (req, res) => {
   try {
-    const { fullName, studentId, email, password } = req.body;
+    const { fullName, studentId, email, password } = req.body || {};
 
-    if (!fullName || !studentId || !email || !password) {
+    if (
+      typeof fullName !== "string" ||
+      typeof studentId !== "string" ||
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      !fullName.trim() ||
+      !studentId.trim() ||
+      !email.trim() ||
+      !password
+    ) {
       return res.status(400).json({
         message: "Please complete all required fields.",
       });
@@ -113,7 +114,6 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Hash the password before saving it
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const student = await Student.create({
@@ -147,13 +147,10 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// =====================================
-// STUDENT AND ADMIN LOGIN
 // POST /api/auth/login
-// =====================================
 router.post("/login", async (req, res) => {
   try {
-    const { studentId, password } = req.body;
+    const { studentId, password } = req.body || {};
 
     if (
       typeof studentId !== "string" ||
@@ -168,7 +165,7 @@ router.post("/login", async (req, res) => {
 
     const username = studentId.trim();
 
-    // ADMIN LOGIN
+    // Administrator login
     if (
       process.env.ADMIN_ID &&
       username === process.env.ADMIN_ID.trim()
@@ -195,8 +192,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // STUDENT LOGIN
-    // Explicitly retrieve the password because Student.js uses select: false
+    // Student login
     const student = await Student.findOne({
       studentId: username,
     }).select("+password");
@@ -211,17 +207,11 @@ router.post("/login", async (req, res) => {
       typeof student.password !== "string" ||
       !student.password
     ) {
-      console.error(
-        "Student account has no stored password hash:",
-        student.studentId
-      );
-
       return res.status(500).json({
         message: "This student account needs a password reset.",
       });
     }
 
-    // Compare the entered password with its stored hash
     const passwordMatches = await bcrypt.compare(
       password,
       student.password
@@ -247,7 +237,7 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("LOGIN ERROR DETAILS:", error);
+    console.error("LOGIN ERROR:", error);
 
     return res.status(500).json({
       message: "Unable to log in. Check the server terminal.",
