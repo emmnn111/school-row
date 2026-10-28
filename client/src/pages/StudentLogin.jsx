@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./StudentLogin.css";
@@ -66,18 +65,23 @@ export default function StudentLogin() {
               password,
             };
 
-      const response = await fetch(`${API}/auth/${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
+      const response = await fetch(
+        `${API_URL}/auth/${endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Login request failed.");
+        throw new Error(
+          data.message || "Login request failed."
+        );
       }
 
       if (formType === "register") {
@@ -85,12 +89,19 @@ export default function StudentLogin() {
         setMode("student");
         setPassword("");
         setConfirmPassword("");
-        setError("Registration successful. You can now log in.");
+        setError(
+          "Registration successful. You can now log in."
+        );
         return;
       }
 
-      if (!data.token || !["student", "admin"].includes(data.role)) {
-        throw new Error("The server returned an invalid login response.");
+      if (
+        !data.token ||
+        !["student", "admin"].includes(data.role)
+      ) {
+        throw new Error(
+          "The server returned an invalid login response."
+        );
       }
 
       if (data.role !== mode) {
@@ -101,11 +112,9 @@ export default function StudentLogin() {
         );
       }
 
-      // Save authentication before navigating.
       localStorage.setItem("schoolrowToken", data.token);
       localStorage.setItem("schoolrowRole", data.role);
 
-      // Replace the login page with the appropriate dashboard.
       const destination =
         data.role === "admin" ? "/admin" : "/student";
 
@@ -113,11 +122,13 @@ export default function StudentLogin() {
     } catch (err) {
       console.error("Schoolrow authentication error:", err);
 
-      setError(
-        err.message === "Failed to fetch"
-          ? "Cannot connect to the backend. Make sure the server is running."
-          : err.message || "Unable to log in."
-      );
+      if (err instanceof TypeError && err.message === "Failed to fetch") {
+        setError(
+          "Cannot connect to the backend. Check your connection and try again."
+        );
+      } else {
+        setError(err.message || "Unable to log in.");
+      }
     } finally {
       setLoading(false);
     }
@@ -140,7 +151,9 @@ export default function StudentLogin() {
         <div className="login-tabs">
           <button
             type="button"
-            className={`login-tab ${mode === "student" ? "active" : ""}`}
+            className={`login-tab ${
+              mode === "student" ? "active" : ""
+            }`}
             onClick={() => changeMode("student")}
           >
             Student Login
@@ -148,7 +161,9 @@ export default function StudentLogin() {
 
           <button
             type="button"
-            className={`login-tab ${mode === "admin" ? "active" : ""}`}
+            className={`login-tab ${
+              mode === "admin" ? "active" : ""
+            }`}
             onClick={() => changeMode("admin")}
           >
             Admin Login
@@ -163,6 +178,7 @@ export default function StudentLogin() {
                 ? "Welcome, Admin"
                 : "Welcome Back"}
           </h1>
+
           <p>
             {formType === "register"
               ? "Register to start borrowing school equipment."
@@ -206,6 +222,7 @@ export default function StudentLogin() {
             <label htmlFor="studentId">
               {mode === "admin" ? "Admin Username" : "Student ID"}
             </label>
+
             <input
               id="studentId"
               value={studentId}
@@ -222,6 +239,7 @@ export default function StudentLogin() {
 
           <div className="form-group">
             <label htmlFor="password">Password</label>
+
             <div className="password-wrapper">
               <input
                 id="password"
@@ -236,6 +254,7 @@ export default function StudentLogin() {
                 }
                 required
               />
+
               <button
                 type="button"
                 className="password-toggle"
@@ -248,7 +267,10 @@ export default function StudentLogin() {
 
           {formType === "register" && (
             <div className="form-group">
-              <label htmlFor="confirmPassword">Confirm Password</label>
+              <label htmlFor="confirmPassword">
+                Confirm Password
+              </label>
+
               <input
                 id="confirmPassword"
                 type={showPassword ? "text" : "password"}
@@ -277,6 +299,7 @@ export default function StudentLogin() {
               : formType === "register"
                 ? "Create Account"
                 : "Log In"}
+
             {!loading && <span aria-hidden="true">→</span>}
           </button>
         </form>
@@ -286,6 +309,7 @@ export default function StudentLogin() {
             {formType === "register"
               ? "Already have an account? "
               : "Don't have an account? "}
+
             <button
               type="button"
               className="text-link"
