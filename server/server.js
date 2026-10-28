@@ -19,6 +19,7 @@ const allowedOrigins = [
   "http://localhost:5174",
   "https://school-row.vercel.app",
   "https://school-fe3d0da95-schoolrow.vercel.app",
+  "https://school-qmgz8hzol-schoolrow.vercel.app",
 ];
 
 // CORS middleware
