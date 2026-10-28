@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -13,18 +12,34 @@ const aiRoutes = require("./routes/aiRoutes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Allowed frontend origins
+// IMPORTANT: Origins must not include /student/login or other paths.
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://school-row.vercel.app",
+  "https://school-fe3d0da95-schoolrow.vercel.app",
+];
+
+// CORS middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-       "https://school-row.vercel.app/student/login",
-    ],
+    origin: function (origin, callback) {
+      // Allow requests without an Origin header, such as some health checks.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn("CORS blocked origin:", origin);
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
 
+// Request body middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -70,14 +85,12 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     if (!process.env.MONGODB_URI) {
-      throw new Error(
-        "MONGODB_URI is missing from server/.env."
-      );
+      throw new Error("MONGODB_URI is missing from server/.env.");
     }
 
     if (!process.env.OPENROUTER_API_KEY) {
       console.warn(
-        "Warning: OPENROUTER_API_KEY is missing. The AI assistant will not work."
+        "Warning: OPENROUTER_API_KEY is missing. The AI assistant may not work."
       );
     }
 
@@ -86,11 +99,12 @@ async function startServer() {
     console.log("MongoDB connected successfully.");
 
     app.listen(PORT, () => {
-      console.log(`Schoolrow API running at http://localhost:${PORT}`);
-      console.log(`Authentication: http://localhost:${PORT}/api/auth`);
-      console.log(`Equipment: http://localhost:${PORT}/api/equipment`);
-      console.log(`Borrowings: http://localhost:${PORT}/api/borrowings`);
-      console.log(`AI: http://localhost:${PORT}/api/ai`);
+      console.log(`Schoolrow API running on port ${PORT}`);
+      console.log(`Authentication: /api/auth`);
+      console.log(`Equipment: /api/equipment`);
+      console.log(`Borrowings: /api/borrowings`);
+      console.log(`AI: /api/ai`);
+      console.log("Allowed frontend origins:", allowedOrigins);
       console.log("AI provider: OpenRouter");
       console.log(
         `AI model: ${
