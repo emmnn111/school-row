@@ -19,6 +19,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:5174",
+       "https://school-row.vercel.app/student/login",
     ],
     credentials: true,
   })
