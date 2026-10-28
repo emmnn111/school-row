@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 export default function RequireStudent({ children }) {
   const [status, setStatus] = useState("checking");
 
@@ -12,22 +15,21 @@ export default function RequireStudent({ children }) {
       const token = localStorage.getItem("schoolrowToken");
 
       if (!token) {
-        if (!cancelled) setStatus("unauthorized");
+        if (!cancelled) {
+          setStatus("unauthorized");
+        }
         return;
       }
 
       try {
-        const response = await fetch(
-          "http://localhost:5000/api/auth/me",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetch(`${API_URL}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (!response.ok) {
-          throw new Error("Session is invalid.");
+          throw new Error("Failed to verify student account.");
         }
 
         const data = await response.json();
@@ -36,12 +38,16 @@ export default function RequireStudent({ children }) {
           throw new Error("This is not a student account.");
         }
 
-        if (!cancelled) setStatus("authorized");
-      } catch {
+        if (!cancelled) {
+          setStatus("authorized");
+        }
+      } catch (error) {
         localStorage.removeItem("schoolrowToken");
         localStorage.removeItem("schoolrowRole");
 
-        if (!cancelled) setStatus("unauthorized");
+        if (!cancelled) {
+          setStatus("unauthorized");
+        }
       }
     }
 

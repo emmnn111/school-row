@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./StudentLogin.css";
 
-const API = "http://localhost:5000/api";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function StudentLogin() {
   const [mode, setMode] = useState("student");
