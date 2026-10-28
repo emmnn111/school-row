@@ -41,7 +41,7 @@ app.use("/api/equipment", equipmentRoutes);
 app.use("/api/borrowings", borrowingRoutes);
 app.use("/api/ai", aiRoutes);
 
-// Not-found handler (must be after all routes)
+// Not-found handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -69,7 +69,15 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     if (!process.env.MONGODB_URI) {
-      throw new Error("MONGODB_URI is missing from server/.env.");
+      throw new Error(
+        "MONGODB_URI is missing from server/.env."
+      );
+    }
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.warn(
+        "Warning: OPENROUTER_API_KEY is missing. The AI assistant will not work."
+      );
     }
 
     await mongoose.connect(process.env.MONGODB_URI);
@@ -82,11 +90,12 @@ async function startServer() {
       console.log(`Equipment: http://localhost:${PORT}/api/equipment`);
       console.log(`Borrowings: http://localhost:${PORT}/api/borrowings`);
       console.log(`AI: http://localhost:${PORT}/api/ai`);
+      console.log("AI provider: OpenRouter");
       console.log(
-        `Ollama: ${process.env.OLLAMA_URL || "http://127.0.0.1:11434"}`
-      );
-      console.log(
-        `AI model: ${process.env.OLLAMA_MODEL || "llama3.2:3b"}`
+        `AI model: ${
+          process.env.OPENROUTER_MODEL ||
+          "nvidia/nemotron-3.5-lightning:free"
+        }`
       );
     });
   } catch (error) {

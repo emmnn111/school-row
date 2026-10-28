@@ -38,9 +38,9 @@
 .schoolrow-ai-panel {
   display: flex;
   flex-direction: column;
-  width: 360px;
-  height: 480px;
-  max-height: calc(100vh - 115px);
+  width: 380px;
+  height: 560px;
+  max-height: calc(100dvh - 115px);
   margin-bottom: 14px;
   overflow: hidden;
   background: #fff;
@@ -304,6 +304,7 @@
   font-size: 10px;
 }
 
+
 @media (max-width: 420px) {
   .schoolrow-ai {
     right: 12px;
@@ -313,6 +314,7 @@
   .schoolrow-ai-panel {
     width: calc(100vw - 24px);
     height: 65vh;
-    max-height: 520px;
+    height: 65dvh;
+    max-height: 560px;
   }
 }

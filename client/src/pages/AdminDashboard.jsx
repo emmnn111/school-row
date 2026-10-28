@@ -12,8 +12,10 @@ import {
   Clock,
   Search,
   Trash2,
+  Pencil,
   Bot,
   Send,
+  UserPlus,
 } from "lucide-react";
 import "./AdminDashboard.css";
 
@@ -30,12 +32,20 @@ const INITIAL_FORM = {
   description: "",
 };
 
+const INITIAL_ADMIN_FORM = {
+  username: "",
+  fullName: "",
+  email: "",
+  password: "",
+};
+
 const NAV_ITEMS = [
   { id: "overview", label: "Dashboard" },
   { id: "equipment", label: "Equipment" },
   { id: "add", label: "Add Equipment" },
   { id: "borrowings", label: "Borrowing Requests" },
   { id: "ai", label: "AI Assistant" },
+  { id: "admins", label: "Admin Management" },
 ];
 
 function formatDate(value) {
@@ -72,7 +82,17 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [editingEquipment, setEditingEquipment] = useState(null);
   const [form, setForm] = useState({ ...INITIAL_FORM });
+
+  const [adminForm, setAdminForm] = useState({
+    ...INITIAL_ADMIN_FORM,
+  });
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [isMainAdmin, setIsMainAdmin] = useState(false);
+  const [adminRequests, setAdminRequests] = useState([]);
+  const [adminRequestsLoading, setAdminRequestsLoading] = useState(false);
+  const [adminActionLoading, setAdminActionLoading] = useState("");
 
   const [aiMessage, setAiMessage] = useState("");
   const [aiMessages, setAiMessages] = useState([
@@ -82,7 +102,6 @@ export default function AdminDashboard() {
         "Hello, Admin! I'm your Schoolrow AI assistant. Ask me about equipment management and borrowing procedures.",
     },
   ]);
-  
 
   const suggestedQuestions = [
     "How do I borrow equipment?",
@@ -90,25 +109,9 @@ export default function AdminDashboard() {
     "Which equipment is available?",
     "How do I search for equipment?",
     "What does pending mean?",
-    "What does approved mean?",
-    "What does rejected mean?",
-    "How do I check my borrowing records?",
-    "How do I add new equipment?",
-    "How do I edit equipment details?",
-    "How do I delete an equipment record?",
-    "What should I do if equipment is damaged?",
-    "How do I update equipment quantities?",
-    "What should I do if Schoolrow is not working?",
-    "What is Schoolrow used for?",
-    "How can I check the total equipment?",
-    "How do I check the status of a request?",
-    "What information is needed to borrow equipment?",
-    "How can I avoid borrowing errors?",
-    "How do I manage borrowing requests?"
   ];
 
   const [aiLoading, setAiLoading] = useState(false);
-
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
 
@@ -137,6 +140,7 @@ export default function AdminDashboard() {
       });
 
       const meData = await meResponse.json();
+      setIsMainAdmin(Boolean(meData.isMainAdmin));
 
       if (!meResponse.ok || meData.role !== "admin") {
         localStorage.removeItem("schoolrowToken");
@@ -195,6 +199,179 @@ export default function AdminDashboard() {
     }
   }, [navigate, token]);
 
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  // Log out.
+  function logout() {
+    localStorage.removeItem("schoolrowToken");
+    localStorage.removeItem("schoolrowRole");
+    navigate("/", { replace: true });
+  }
+
+  function selectTab(tab) {
+    setActiveTab(tab);
+    setSearch("");
+    setError("");
+    setNotice("");
+  }
+
+  // Create an administrator account.
+  async function createAdmin(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+
+    if (
+      !adminForm.username.trim() ||
+      !adminForm.fullName.trim() ||
+      !adminForm.email.trim() ||
+      !adminForm.password
+    ) {
+      setError("Please complete all administrator fields.");
+      return;
+    }
+
+    if (adminForm.password.length < 8) {
+      setError("Password must contain at least 8 characters.");
+      return;
+    }
+
+    setAdminSaving(true);
+
+    try {
+      const response = await fetch(`${API_URL}/auth/admins`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: adminForm.username.trim(),
+          fullName: adminForm.fullName.trim(),
+          email: adminForm.email.trim().toLowerCase(),
+          password: adminForm.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to create administrator account."
+        );
+      }
+
+      setNotice(
+        `Administrator "${data.user?.username || adminForm.username}" created successfully.`
+      );
+
+      setAdminForm({ ...INITIAL_ADMIN_FORM });
+    } catch (err) {
+      setError(
+        err.message || "Unable to create administrator account."
+      );
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
+  
+// Load administrator accounts and approval requests.
+// Only the Main Admin should call this function.
+const loadAdminRequests = useCallback(async () => {
+  if (!token || !isMainAdmin) return;
+
+  setAdminRequestsLoading(true);
+  setError("");
+
+  try {
+    const response = await fetch(`${API_URL}/auth/admins/requests`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || "Failed to load administrator requests."
+      );
+    }
+
+    setAdminRequests(
+      Array.isArray(data)
+        ? data
+        : data.data || data.admins || []
+    );
+  } catch (err) {
+    setError(
+      err.message || "Unable to load administrator requests."
+    );
+  } finally {
+    setAdminRequestsLoading(false);
+  }
+}, [token, isMainAdmin]);
+
+useEffect(() => {
+  if (isMainAdmin) {
+    loadAdminRequests();
+  }
+}, [isMainAdmin, loadAdminRequests]);
+
+async function updateAdminApproval(adminId, status) {
+  if (!isMainAdmin) {
+    setError("Only the Main Admin can review administrator requests.");
+    return;
+  }
+
+  if (!adminId || !["Approved", "Rejected"].includes(status)) {
+    setError("Invalid administrator request or status.");
+    return;
+  }
+
+  setAdminActionLoading(adminId);
+  setError("");
+  setNotice("");
+
+  try {
+    const response = await fetch(
+      `${API_URL}/auth/admins/${adminId}/approval`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || "Failed to update administrator approval."
+      );
+    }
+
+    setNotice(
+      status === "Approved"
+        ? "Administrator request approved."
+        : "Administrator request rejected."
+    );
+
+    await loadAdminRequests();
+  } catch (err) {
+    setError(
+      err.message || "Unable to update administrator approval."
+    );
+  } finally {
+    setAdminActionLoading("");
+  }
+}
   // Send a message to the Schoolrow AI backend.
   async function sendAiMessage(event) {
     event.preventDefault();
@@ -260,7 +437,7 @@ export default function AdminDashboard() {
     } catch (err) {
       const errorMessage =
         err.name === "AbortError"
-          ? "The AI took too long to respond. Check that Ollama is running and the model has loaded."
+          ? "The AI took too long to respond. Check your AI provider configuration."
           : err.message || "Unable to contact the AI assistant.";
 
       setAiMessages((previous) => [
@@ -274,23 +451,6 @@ export default function AdminDashboard() {
       clearTimeout(timeoutId);
       setAiLoading(false);
     }
-  }
-
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
-
-  function logout() {
-    localStorage.removeItem("schoolrowToken");
-    localStorage.removeItem("schoolrowRole");
-    navigate("/", { replace: true });
-  }
-
-  function selectTab(tab) {
-    setActiveTab(tab);
-    setSearch("");
-    setError("");
-    setNotice("");
   }
 
   function updateForm(event) {
@@ -337,12 +497,118 @@ export default function AdminDashboard() {
 
   function resetForm() {
     setForm({ ...INITIAL_FORM });
+    setEditingEquipment(null);
     setImageFile(null);
     setImagePreview("");
 
     const fileInput = document.getElementById("equipment-image");
 
     if (fileInput) fileInput.value = "";
+  }
+
+  function startEditingEquipment(item) {
+    setEditingEquipment(item);
+
+    setForm({
+      name: item.name || "",
+      assetCode: item.assetCode || "",
+      category: item.category || "",
+      location: item.location || "",
+      quantityTotal: Number(item.quantityTotal ?? 1),
+      quantityAvailable: Number(item.quantityAvailable ?? 1),
+      condition: item.condition || "Good",
+      description: item.description || "",
+    });
+
+    setImageFile(null);
+    setImagePreview(item.image || "");
+    setError("");
+    setNotice("");
+    setActiveTab("add");
+  }
+
+  async function updateEquipment(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+
+    const id = editingEquipment?._id || editingEquipment?.id;
+
+    if (!id) {
+      setError(
+        "Equipment ID is missing. Please select the equipment again."
+      );
+      return;
+    }
+
+    if (
+      !form.name.trim() ||
+      !form.assetCode.trim() ||
+      !form.category.trim() ||
+      !form.location.trim()
+    ) {
+      setError("Please fill in all required equipment fields.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(Number(form.quantityTotal)) ||
+      !Number.isInteger(Number(form.quantityAvailable)) ||
+      Number(form.quantityTotal) < 1 ||
+      Number(form.quantityAvailable) < 0 ||
+      Number(form.quantityAvailable) > Number(form.quantityTotal)
+    ) {
+      setError("Please enter valid equipment quantities.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const formData = new FormData();
+
+      formData.append("name", form.name.trim());
+      formData.append("assetCode", form.assetCode.trim());
+      formData.append("category", form.category.trim());
+      formData.append("location", form.location.trim());
+      formData.append(
+        "quantityTotal",
+        String(Number(form.quantityTotal))
+      );
+      formData.append(
+        "quantityAvailable",
+        String(Number(form.quantityAvailable))
+      );
+      formData.append("condition", form.condition);
+      formData.append("description", form.description || "");
+
+      if (imageFile) {
+        formData.append("image", imageFile);
+      }
+
+      const response = await fetch(`${API_URL}/equipment/${id}`, {
+        method: "PUT",
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update equipment.");
+      }
+
+      setNotice("Equipment updated successfully.");
+      resetForm();
+      setActiveTab("equipment");
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message || "Failed to update equipment.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function addEquipment(event) {
@@ -376,10 +642,10 @@ export default function AdminDashboard() {
     try {
       const formData = new FormData();
 
-      formData.append("name", form.name);
-      formData.append("assetCode", form.assetCode);
-      formData.append("category", form.category);
-      formData.append("location", form.location);
+      formData.append("name", form.name.trim());
+      formData.append("assetCode", form.assetCode.trim());
+      formData.append("category", form.category.trim());
+      formData.append("location", form.location.trim());
       formData.append(
         "quantityTotal",
         String(Number(form.quantityTotal))
@@ -528,6 +794,8 @@ export default function AdminDashboard() {
       item.purpose,
       item.status,
       item.equipmentId?.name,
+      item.equipment?.name,
+      item.equipmentName,
     ]
       .filter(Boolean)
       .join(" ")
@@ -569,7 +837,9 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="admin-nav">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS
+  .filter((item) => item.id !== "admins" || isMainAdmin)
+  .map((item) => (
             <button
               key={item.id}
               type="button"
@@ -587,6 +857,7 @@ export default function AdminDashboard() {
                 <ClipboardList size={19} />
               )}
               {item.id === "ai" && <Bot size={19} />}
+              {item.id === "admins" && <UserPlus size={19} />}
 
               <span>{item.label}</span>
             </button>
@@ -614,14 +885,18 @@ export default function AdminDashboard() {
               {activeTab === "ai" && "AI Assistant"}
               {activeTab === "overview" && "Dashboard"}
               {activeTab === "equipment" && "Equipment Management"}
-              {activeTab === "add" && "Add Equipment"}
+              {activeTab === "add" &&
+                (editingEquipment ? "Edit Equipment" : "Add Equipment")}
               {activeTab === "borrowings" && "Borrowing Requests"}
+              {activeTab === "admins" && "Admin Management"}
             </h1>
 
             <p>
               {activeTab === "ai"
                 ? "Your AI assistant for Schoolrow administration."
-                : "Manage school equipment and borrowing requests."}
+                : activeTab === "admins"
+                  ? "Create additional administrator accounts for Schoolrow."
+                  : "Manage school equipment and borrowing requests."}
             </p>
           </div>
 
@@ -654,6 +929,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Dashboard Overview */}
         {activeTab === "overview" && (
           <section className="admin-content">
             <div className="admin-welcome">
@@ -815,22 +1091,30 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Add or Edit Equipment */}
         {activeTab === "add" && (
           <section className="admin-content">
             <div className="admin-section-card">
               <div className="admin-section-heading">
                 <div>
-                  <h2>Equipment Information</h2>
+                  <h2>
+                    {editingEquipment
+                      ? "Edit Equipment"
+                      : "Equipment Information"}
+                  </h2>
                   <p>
-                    Enter the equipment details and optionally select a
-                    photo from your computer.
+                    {editingEquipment
+                      ? "Update the selected equipment details and save your changes."
+                      : "Enter the equipment details and optionally select a photo from your computer."}
                   </p>
                 </div>
               </div>
 
               <form
                 className="admin-equipment-form"
-                onSubmit={addEquipment}
+                onSubmit={
+                  editingEquipment ? updateEquipment : addEquipment
+                }
               >
                 <div className="admin-form-grid">
                   <div className="admin-form-field">
@@ -991,10 +1275,13 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     className="admin-secondary-button"
-                    onClick={resetForm}
+                    onClick={() => {
+                      resetForm();
+                      if (editingEquipment) setActiveTab("equipment");
+                    }}
                     disabled={saving}
                   >
-                    Clear Form
+                    {editingEquipment ? "Cancel Edit" : "Clear Form"}
                   </button>
 
                   <button
@@ -1002,7 +1289,13 @@ export default function AdminDashboard() {
                     className="admin-primary-button"
                     disabled={saving}
                   >
-                    {saving ? "Saving..." : "Save Equipment"}
+                    {saving
+                      ? editingEquipment
+                        ? "Updating..."
+                        : "Saving..."
+                      : editingEquipment
+                        ? "Save Changes"
+                        : "Save Equipment"}
                   </button>
                 </div>
               </form>
@@ -1010,6 +1303,7 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Equipment Inventory */}
         {activeTab === "equipment" && (
           <section className="admin-content">
             <div className="admin-section-card">
@@ -1084,14 +1378,25 @@ export default function AdminDashboard() {
                           {item.quantityTotal ?? 0}
                         </p>
 
-                        <button
-                          type="button"
-                          className="admin-danger-button"
-                          onClick={() => deleteEquipment(item)}
-                        >
-                          <Trash2 size={16} />
-                          Delete
-                        </button>
+                        <div className="admin-action-buttons">
+                          <button
+                            type="button"
+                            className="admin-secondary-button"
+                            onClick={() => startEditingEquipment(item)}
+                          >
+                            <Pencil size={16} />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="admin-danger-button"
+                            onClick={() => deleteEquipment(item)}
+                          >
+                            <Trash2 size={16} />
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -1101,6 +1406,7 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Borrowing Requests */}
         {activeTab === "borrowings" && (
           <section className="admin-content">
             <div className="admin-section-card">
@@ -1284,29 +1590,28 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-              
-<div className="admin-ai-suggestions">
-  <h3>Suggested Questions</h3>
-  <p>Choose a question to fill the message box.</p>
 
-  <div className="admin-ai-suggestions-list">
-    {suggestedQuestions.map((question, index) => (
-      <button
-        key={question}
-        type="button"
-        className="admin-ai-suggestion"
-        disabled={aiLoading}
-        onClick={() => setAiMessage(question)}
-      >
-        <span className="admin-ai-suggestion-number">
-          {index + 1}
-        </span>
+              <div className="admin-ai-suggestions">
+                <h3>Suggested Questions</h3>
+                <p>Choose a question to fill the message box.</p>
 
-        <span>{question}</span>
-      </button>
-    ))}
-  </div>
-</div>
+                <div className="admin-ai-suggestions-list">
+                  {suggestedQuestions.map((question, index) => (
+                    <button
+                      key={question}
+                      type="button"
+                      className="admin-ai-suggestion"
+                      disabled={aiLoading}
+                      onClick={() => setAiMessage(question)}
+                    >
+                      <span className="admin-ai-suggestion-number">
+                        {index + 1}
+                      </span>
+                      <span>{question}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <form
                 className="admin-ai-form"
@@ -1340,6 +1645,226 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Admin Management */}
+{activeTab === "admins" && (
+  <section className="dashboard-section">
+    <div className="section-header">
+      <div>
+        <h2>Admin Management</h2>
+        <p>Manage administrator accounts and approval requests.</p>
+      </div>
+    </div>
+
+    {/* Create Admin Account — Main Admin only */}
+    {isMainAdmin && (
+      <div className="dashboard-card">
+        <h3>Create Admin Account</h3>
+        <p>
+          Create an administrator account that can manage equipment
+          and borrowing requests.
+        </p>
+
+        <form onSubmit={createAdmin} className="admin-form">
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="adminUsername">Username</label>
+              <input
+                id="adminUsername"
+                type="text"
+                value={adminForm.username}
+                onChange={(e) =>
+                  setAdminForm({
+                    ...adminForm,
+                    username: e.target.value,
+                  })
+                }
+                placeholder="Enter username"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="adminFullName">Full Name</label>
+              <input
+                id="adminFullName"
+                type="text"
+                value={adminForm.fullName}
+                onChange={(e) =>
+                  setAdminForm({
+                    ...adminForm,
+                    fullName: e.target.value,
+                  })
+                }
+                placeholder="Enter full name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="adminEmail">Email Address</label>
+              <input
+                id="adminEmail"
+                type="email"
+                value={adminForm.email}
+                onChange={(e) =>
+                  setAdminForm({
+                    ...adminForm,
+                    email: e.target.value,
+                  })
+                }
+                placeholder="Enter email address"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="adminPassword">Password</label>
+              <input
+                id="adminPassword"
+                type="password"
+                value={adminForm.password}
+                onChange={(e) =>
+                  setAdminForm({
+                    ...adminForm,
+                    password: e.target.value,
+                  })
+                }
+                placeholder="Enter password"
+                minLength={8}
+                required
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={adminSaving}
+          >
+            {adminSaving ? "Creating..." : "Create Admin"}
+          </button>
+        </form>
+      </div>
+    )}
+
+    {/* Admin Approval Requests */}
+    {isMainAdmin && (
+      <div className="dashboard-card">
+        <div className="section-header">
+          <div>
+            <h3>Admin Approval Requests</h3>
+            <p>
+              Review requests from users who want administrator access.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={loadAdminRequests}
+            disabled={adminRequestsLoading}
+          >
+            {adminRequestsLoading ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {adminRequestsLoading ? (
+          <p>Loading admin requests...</p>
+        ) : adminRequests.length === 0 ? (
+          <div className="empty-state">
+            <p>No admin requests found.</p>
+          </div>
+        ) : (
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Full Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Date Requested</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {adminRequests.map((admin) => (
+                  <tr key={admin._id}>
+                    <td>{admin.username}</td>
+                    <td>{admin.fullName}</td>
+                    <td>{admin.email}</td>
+
+                    <td>
+                      <span
+                        className={`status-badge ${
+                          admin.status?.toLowerCase() || "pending"
+                        }`}
+                      >
+                        {admin.status || "Pending"}
+                      </span>
+                    </td>
+
+                    <td>
+                      {admin.createdAt
+                        ? new Date(admin.createdAt).toLocaleDateString()
+                        : "—"}
+                    </td>
+
+                    <td>
+                      {admin.status === "Pending" ? (
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className="approve-button"
+                            onClick={() =>
+                              updateAdminApproval(admin._id, "Approved")
+                            }
+                            disabled={adminActionLoading === admin._id}
+                          >
+                            {adminActionLoading === admin._id
+                              ? "Processing..."
+                              : "Approve"}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="reject-button"
+                            onClick={() =>
+                              updateAdminApproval(admin._id, "Rejected")
+                            }
+                            disabled={adminActionLoading === admin._id}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span>Reviewed</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )}
+
+    {!isMainAdmin && (
+      <div className="dashboard-card">
+        <h3>Administrator Access</h3>
+        <p>
+          You can manage equipment and borrowing requests. Only the
+          Main Admin can create administrator accounts or review
+          administrator approval requests.
+        </p>
+      </div>
+    )}
+  </section>
+)}
+
+        {/* Borrowing Request Details Modal */}
         {selectedRequest && (
           <div
             className="admin-modal-backdrop"

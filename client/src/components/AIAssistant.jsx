@@ -5,12 +5,46 @@ import "./AIAssistant.css";
 const API_BASE =
   import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+const suggestions = {
+  student: [
+    "What equipment is currently available?",
+    "How do I borrow school equipment?",
+    "What do the borrowing statuses mean?",
+    "How can I check my borrowing status?",
+    "How do I return borrowed equipment?",
+    "What should I do if equipment is damaged?",
+    "What information do I need to borrow equipment?",
+    "Why is my borrowing request still pending?",
+    "What should I do if my request is rejected?",
+    "Can I request more than one equipment item?",
+    "How can I check my expected return date?",
+    "What should I do if I need to extend my borrowing period?",
+  ],
+  admin: [
+    "Show me the available equipment.",
+    "Which equipment has low stock?",
+    "Which equipment is damaged?",
+    "How do I add new equipment?",
+    "How do I update equipment details?",
+    "How can I manage borrowing requests?",
+    "What do the borrowing statuses mean?",
+    "How do I process equipment returns?",
+  ],
+};
+
 export default function AIAssistant({ role = "student" }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const roleSuggestions =
+    suggestions[role] || suggestions.student;
+
+  function chooseSuggestion(question) {
+    setMessage(question);
+  }
 
   async function sendMessage(event) {
     event.preventDefault();
@@ -69,7 +103,8 @@ export default function AIAssistant({ role = "student" }) {
       ]);
     } catch (err) {
       setError(
-        err.message || "The AI assistant is temporarily unavailable."
+        err.message ||
+          "The AI assistant is temporarily unavailable."
       );
     } finally {
       setLoading(false);
@@ -131,25 +166,19 @@ export default function AIAssistant({ role = "student" }) {
                 <p>
                   {role === "admin"
                     ? "Ask me about equipment management, borrowing requests, and returns."
-                    : "Ask me about borrowing equipment, request statuses, and returning items."}
+                    : "Ask me about available equipment, borrowing requests, and returns."}
                 </p>
+
                 <div className="schoolrow-ai-suggestions">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setMessage("How do I borrow school equipment?")
-                    }
-                  >
-                    How do I borrow equipment?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setMessage("What do the borrowing statuses mean?")
-                    }
-                  >
-                    Explain request statuses
-                  </button>
+                  {roleSuggestions.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      onClick={() => chooseSuggestion(question)}
+                    >
+                      {question}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
