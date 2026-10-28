@@ -3,9 +3,8 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const Student = require("../models/Student");
+const Student = require("../models/student");
 const Admin = require("../models/Admin");
-
 const router = express.Router();
 
 // --------------------------------------------------
