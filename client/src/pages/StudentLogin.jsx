@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import "./StudentLogin.css";
 
 const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
 
 export default function StudentLogin() {
   const [mode, setMode] = useState("student");
@@ -118,11 +119,14 @@ export default function StudentLogin() {
       const destination =
         data.role === "admin" ? "/admin" : "/student";
 
-      window.location.replace(destination);
+      navigate(destination, { replace: true });
     } catch (err) {
       console.error("Schoolrow authentication error:", err);
 
-      if (err instanceof TypeError && err.message === "Failed to fetch") {
+      if (
+        err instanceof TypeError &&
+        err.message === "Failed to fetch"
+      ) {
         setError(
           "Cannot connect to the backend. Check your connection and try again."
         );

@@ -1,9 +1,9 @@
-
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
 
 export default function RequireStudent({ children }) {
   const [status, setStatus] = useState("checking");
@@ -13,8 +13,9 @@ export default function RequireStudent({ children }) {
 
     async function checkStudent() {
       const token = localStorage.getItem("schoolrowToken");
+      const savedRole = localStorage.getItem("schoolrowRole");
 
-      if (!token) {
+      if (!token || savedRole !== "student") {
         if (!cancelled) {
           setStatus("unauthorized");
         }
@@ -23,6 +24,7 @@ export default function RequireStudent({ children }) {
 
       try {
         const response = await fetch(`${API_URL}/auth/me`, {
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -34,7 +36,15 @@ export default function RequireStudent({ children }) {
 
         const data = await response.json();
 
-        if (data.role !== "student" || !data.student) {
+        // Support common response shapes.
+        const user = data.user || data.data || data;
+        const role = user.role || data.role;
+        const student =
+          user.student ||
+          data.student ||
+          (role === "student" ? user : null);
+
+        if (role !== "student" || !student) {
           throw new Error("This is not a student account.");
         }
 
@@ -42,6 +52,8 @@ export default function RequireStudent({ children }) {
           setStatus("authorized");
         }
       } catch (error) {
+        console.error("Student verification error:", error);
+
         localStorage.removeItem("schoolrowToken");
         localStorage.removeItem("schoolrowRole");
 
