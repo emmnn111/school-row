@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -12,8 +13,11 @@ const aiRoutes = require("./routes/aiRoutes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Allowed frontend origins
-// IMPORTANT: Origins must not include /student/login or other paths.
+// Configure Express for the Render reverse proxy.
+app.set("trust proxy", 1);
+
+// Allowed frontend origins.
+// Origins must not include paths such as /student/login.
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
@@ -26,7 +30,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without an Origin header, such as some health checks.
+      // Allow requests without an Origin header, such as health checks.
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -101,10 +105,10 @@ async function startServer() {
 
     app.listen(PORT, () => {
       console.log(`Schoolrow API running on port ${PORT}`);
-      console.log(`Authentication: /api/auth`);
-      console.log(`Equipment: /api/equipment`);
-      console.log(`Borrowings: /api/borrowings`);
-      console.log(`AI: /api/ai`);
+      console.log("Authentication: /api/auth");
+      console.log("Equipment: /api/equipment");
+      console.log("Borrowings: /api/borrowings");
+      console.log("AI: /api/ai");
       console.log("Allowed frontend origins:", allowedOrigins);
       console.log("AI provider: OpenRouter");
       console.log(

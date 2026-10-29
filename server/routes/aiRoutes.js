@@ -66,7 +66,8 @@ router.post("/", requireLogin, aiLimiter, async (req, res) => {
 
   if (message.length > 2000) {
     return res.status(400).json({
-      message: "Your message is too long. Please use 2000 characters or fewer.",
+      message:
+        "Your message is too long. Please use 2000 characters or fewer.",
     });
   }
 
@@ -74,7 +75,8 @@ router.post("/", requireLogin, aiLimiter, async (req, res) => {
 
   if (!instructions[userRole]) {
     return res.status(403).json({
-      message: "Your account role is not authorized to use this AI assistant.",
+      message:
+        "Your account role is not authorized to use this AI assistant.",
     });
   }
 
@@ -141,9 +143,11 @@ equipment questions.
 ${JSON.stringify(inventory)}
 
 Total records included: ${inventory.length}.
-${inventory.length === 100
-        ? "The query is limited to 100 records; do not claim this is the complete inventory."
-        : "All records returned by the current equipment query are included."}
+${
+  inventory.length === 100
+    ? "The query is limited to 100 records; do not claim this is the complete inventory."
+    : "All records returned by the current equipment query are included."
+}
 
 Rules:
 - quantityTotal means the total quantity recorded.
@@ -180,13 +184,9 @@ Rules:
               content: message.trim(),
             },
           ],
-          max_tokens: 800,
+          max_tokens: 1600,
           temperature: 0.3,
           stream: false,
-          reasoning: {
-            effort: "minimal",
-            exclude: true,
-          },
         }),
       }
     );
