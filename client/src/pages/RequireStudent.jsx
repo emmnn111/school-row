@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function RequireStudent({ children }) {
   const [status, setStatus] = useState("checking");
@@ -15,6 +14,7 @@ export default function RequireStudent({ children }) {
       const token = localStorage.getItem("schoolrowToken");
       const savedRole = localStorage.getItem("schoolrowRole");
 
+      // Make sure a student token and role exist.
       if (!token || savedRole !== "student") {
         if (!cancelled) {
           setStatus("unauthorized");
@@ -31,14 +31,19 @@ export default function RequireStudent({ children }) {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to verify student account.");
+          throw new Error(
+            `Student verification failed (${response.status}).`
+          );
         }
 
         const data = await response.json();
 
-        // Support common response shapes.
+        // Support common backend response structures.
         const user = data.user || data.data || data;
         const role = user.role || data.role;
+
+        // Accept either a nested student object or a user object
+        // when the verified role is student.
         const student =
           user.student ||
           data.student ||
@@ -54,6 +59,7 @@ export default function RequireStudent({ children }) {
       } catch (error) {
         console.error("Student verification error:", error);
 
+        // Clear invalid credentials.
         localStorage.removeItem("schoolrowToken");
         localStorage.removeItem("schoolrowRole");
 
