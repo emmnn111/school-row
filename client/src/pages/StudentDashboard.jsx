@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -50,7 +49,8 @@ function StudentDashboard() {
 
   const signOut = useCallback(() => {
     localStorage.removeItem("schoolrowToken");
-    navigate("/login", { replace: true });
+    localStorage.removeItem("schoolrowRole");
+    navigate("/student/login", { replace: true });
   }, [navigate]);
 
   const apiFetch = useCallback(
@@ -91,8 +91,8 @@ function StudentDashboard() {
       }
 
       const [profileRes, equipmentRes] = await Promise.all([
-        apiFetch(`${API}/auth/me`),
-        apiFetch(`${API}/equipment`),
+        apiFetch(`${API_URL}/auth/me`),
+        apiFetch(`${API_URL}/equipment`),
       ]);
 
       if (!profileRes.ok) {
@@ -114,11 +114,11 @@ function StudentDashboard() {
 
       setStudent(profile);
 
-      setEquipment(
-        Array.isArray(equipmentData)
-          ? equipmentData
-          : equipmentData.data || equipmentData.equipment || []
-      );
+      const equipmentList = Array.isArray(equipmentData)
+        ? equipmentData
+        : equipmentData.data || equipmentData.equipment || [];
+
+      setEquipment(equipmentList);
 
       setForm((previous) => ({
         ...previous,
@@ -142,7 +142,7 @@ function StudentDashboard() {
           "",
       }));
 
-      const borrowingRes = await apiFetch(`${API}/borrowings`);
+      const borrowingRes = await apiFetch(`${API_URL}/borrowings`);
 
       if (!borrowingRes.ok) {
         throw new Error("Could not load your borrowing history.");
@@ -250,7 +250,7 @@ function StudentDashboard() {
     setSubmitting(true);
 
     try {
-      const response = await apiFetch(`${API}/borrowings`, {
+      const response = await apiFetch(`${API_URL}/borrowings`, {
         method: "POST",
         body: JSON.stringify({
           studentName: form.studentName.trim(),
@@ -279,12 +279,12 @@ function StudentDashboard() {
 
       await loadDashboard();
 
-      setForm({
+      setForm((previous) => ({
         ...emptyForm,
-        studentName: form.studentName,
-        studentId: form.studentId,
-        course: form.course,
-      });
+        studentName: previous.studentName,
+        studentId: previous.studentId,
+        course: previous.course,
+      }));
     } catch (err) {
       setError(err.message || "Unable to submit your request.");
     } finally {
@@ -356,9 +356,7 @@ function StudentDashboard() {
             "Student"}
           !
         </h2>
-        <p>
-          Find school equipment and manage your borrowing requests.
-        </p>
+        <p>Find school equipment and manage your borrowing requests.</p>
       </section>
 
       {error && (
@@ -368,10 +366,7 @@ function StudentDashboard() {
       )}
 
       {message && (
-        <div
-          className="dashboard-alert success-alert"
-          role="status"
-        >
+        <div className="dashboard-alert success-alert" role="status">
           {message}
         </div>
       )}
@@ -500,9 +495,7 @@ function StudentDashboard() {
 
                   <h3>{name}</h3>
                   <p>{item.category || "School equipment"}</p>
-                  <p>
-                    {item.description || "No description available."}
-                  </p>
+                  <p>{item.description || "No description available."}</p>
                   <p>Available: {available}</p>
 
                   <button
@@ -517,9 +510,7 @@ function StudentDashboard() {
                     }}
                     disabled={!item._id || available < 1}
                   >
-                    {available < 1
-                      ? "Unavailable"
-                      : "Select Equipment"}
+                    {available < 1 ? "Unavailable" : "Select Equipment"}
                   </button>
                 </article>
               );
@@ -531,8 +522,7 @@ function StudentDashboard() {
       <section className="dashboard-section">
         <h2>Borrow Equipment</h2>
         <p>
-          Enter your student information and complete the borrowing
-          request.
+          Enter your student information and complete the borrowing request.
         </p>
 
         {selectedEquipment && (
@@ -619,9 +609,7 @@ function StudentDashboard() {
                 value={form.quantity}
                 onChange={handleChange}
                 onKeyDown={(event) => {
-                  if (
-                    ["-", "+", "e", "E", "."].includes(event.key)
-                  ) {
+                  if (["-", "+", "e", "E", "."].includes(event.key)) {
                     event.preventDefault();
                   }
                 }}
@@ -655,9 +643,7 @@ function StudentDashboard() {
             </div>
 
             <div className="form-field full-width">
-              <label htmlFor="purpose">
-                Purpose of Borrowing *
-              </label>
+              <label htmlFor="purpose">Purpose of Borrowing *</label>
               <textarea
                 id="purpose"
                 name="purpose"
@@ -713,26 +699,22 @@ function StudentDashboard() {
                         item.equipmentId?.name ||
                         "Equipment"}
                     </h3>
-
                     <p>Student: {item.studentName}</p>
                     <p>Student ID: {item.studentId}</p>
                     <p>Course / Section: {item.courseSection}</p>
                     <p>Quantity: {item.quantity ?? 1}</p>
-
                     <p>
                       Borrow date:{" "}
                       {item.borrowDate
                         ? String(item.borrowDate).slice(0, 10)
                         : "Not specified"}
                     </p>
-
                     <p>
                       Return date:{" "}
                       {item.expectedReturnDate
                         ? String(item.expectedReturnDate).slice(0, 10)
                         : "Not specified"}
                     </p>
-
                     {item.purpose && <p>Purpose: {item.purpose}</p>}
                   </div>
 
@@ -754,7 +736,6 @@ function StudentDashboard() {
         <p>Schoolrow Student Borrowing Portal</p>
       </footer>
 
-      {/* Floating AI assistant */}
       <AIAssistant role="student" />
     </main>
   );
