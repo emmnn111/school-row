@@ -1,3 +1,4 @@
+
 const express = require("express");
 const mongoose = require("mongoose");
 const multer = require("multer");
@@ -17,7 +18,7 @@ cloudinary.config({
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024 // Maximum 5 MB
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: (req, file, callback) => {
     const allowedTypes = [
@@ -58,7 +59,7 @@ function uploadToCloudinary(fileBuffer) {
   });
 }
 
-// Handle upload errors, such as invalid image type or file too large
+// Handle image upload errors
 function handleUploadError(error, req, res, next) {
   if (error instanceof multer.MulterError) {
     const message =
@@ -108,7 +109,7 @@ router.get("/", async (req, res) => {
       createdAt: -1
     });
 
-    res.json({
+    return res.json({
       success: true,
       count: equipment.length,
       data: equipment
@@ -116,7 +117,7 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("Retrieve equipment error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to retrieve equipment."
     });
@@ -142,7 +143,7 @@ router.post(
         quantityAvailable,
         condition,
         location
-      } = req.body;
+      } = req.body || {};
 
       if (
         typeof name !== "string" ||
@@ -175,14 +176,10 @@ router.post(
         });
       }
 
-      // Upload the image if the admin selected one
       let imageUrl = "";
 
       if (req.file) {
-        const uploadedImage = await uploadToCloudinary(
-          req.file.buffer
-        );
-
+        const uploadedImage = await uploadToCloudinary(req.file.buffer);
         imageUrl = uploadedImage.secure_url;
       }
 
@@ -198,7 +195,7 @@ router.post(
         image: imageUrl
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         message: "Equipment added successfully.",
         data: equipment
@@ -206,7 +203,7 @@ router.post(
     } catch (error) {
       console.error("Add equipment error:", error);
 
-      res.status(error.code === 11000 ? 400 : 500).json({
+      return res.status(error.code === 11000 ? 400 : 500).json({
         success: false,
         message:
           error.code === 11000
@@ -217,130 +214,147 @@ router.post(
   }
 );
 
-// PUT: Edit existing equipment
-// This route retains support for updating an image using its URL.
-router.put("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+// PUT: Edit existing equipment with optional image upload
+router.put(
+  "/:id",
+  (req, res, next) => {
+    upload.single("image")(req, res, (error) => {
+      handleUploadError(error, req, res, next);
+    });
+  },
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid equipment ID."
-      });
-    }
-
-    const allowedFields = [
-      "name",
-      "assetCode",
-      "category",
-      "description",
-      "quantityTotal",
-      "quantityAvailable",
-      "condition",
-      "location",
-      "image"
-    ];
-
-    const updates = {};
-
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
-    }
-
-    for (const field of ["name", "assetCode", "category"]) {
-      if (
-        updates[field] !== undefined &&
-        (
-          typeof updates[field] !== "string" ||
-          !updates[field].trim()
-        )
-      ) {
+      if (!mongoose.isValidObjectId(id)) {
         return res.status(400).json({
           success: false,
-          message: `${field} cannot be empty.`
+          message: "Invalid equipment ID."
         });
       }
 
-      if (typeof updates[field] === "string") {
-        updates[field] = updates[field].trim();
+      const body = req.body || {};
+
+      const allowedFields = [
+        "name",
+        "assetCode",
+        "category",
+        "description",
+        "quantityTotal",
+        "quantityAvailable",
+        "condition",
+        "location",
+        "image"
+      ];
+
+      const updates = {};
+
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) {
+          updates[field] = body[field];
+        }
       }
-    }
 
-    if (
-      updates.quantityTotal !== undefined ||
-      updates.quantityAvailable !== undefined
-    ) {
-      const current = await Equipment.findById(id);
+      // Validate required text fields when provided
+      for (const field of ["name", "assetCode", "category"]) {
+        if (
+          updates[field] !== undefined &&
+          (
+            typeof updates[field] !== "string" ||
+            !updates[field].trim()
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: `${field} cannot be empty.`
+          });
+        }
 
-      if (!current) {
+        if (typeof updates[field] === "string") {
+          updates[field] = updates[field].trim();
+        }
+      }
+
+      // Upload a new image only when one is selected
+      if (req.file) {
+        const uploadedImage = await uploadToCloudinary(req.file.buffer);
+        updates.image = uploadedImage.secure_url;
+      }
+
+      // Validate quantities against the existing equipment record
+      if (
+        updates.quantityTotal !== undefined ||
+        updates.quantityAvailable !== undefined
+      ) {
+        const current = await Equipment.findById(id);
+
+        if (!current) {
+          return res.status(404).json({
+            success: false,
+            message: "Equipment not found."
+          });
+        }
+
+        const total = Number(
+          updates.quantityTotal ?? current.quantityTotal
+        );
+
+        const available = Number(
+          updates.quantityAvailable ?? current.quantityAvailable
+        );
+
+        if (
+          !Number.isInteger(total) ||
+          !Number.isInteger(available) ||
+          total < 0 ||
+          available < 0 ||
+          available > total
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Quantities must be whole numbers, and available quantity cannot exceed total quantity."
+          });
+        }
+
+        updates.quantityTotal = total;
+        updates.quantityAvailable = available;
+      }
+
+      const equipment = await Equipment.findByIdAndUpdate(
+        id,
+        updates,
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+      if (!equipment) {
         return res.status(404).json({
           success: false,
           message: "Equipment not found."
         });
       }
 
-      const total = Number(
-        updates.quantityTotal ?? current.quantityTotal
-      );
+      return res.json({
+        success: true,
+        message: "Equipment updated successfully.",
+        data: equipment
+      });
+    } catch (error) {
+      console.error("Update equipment error:", error);
 
-      const available = Number(
-        updates.quantityAvailable ?? current.quantityAvailable
-      );
-
-      if (
-        !Number.isInteger(total) ||
-        !Number.isInteger(available) ||
-        total < 0 ||
-        available < 0 ||
-        available > total
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Quantities must be whole numbers, and available quantity cannot exceed total quantity."
-        });
-      }
-
-      updates.quantityTotal = total;
-      updates.quantityAvailable = available;
-    }
-
-    const equipment = await Equipment.findByIdAndUpdate(
-      id,
-      updates,
-      {
-        new: true,
-        runValidators: true
-      }
-    );
-
-    if (!equipment) {
-      return res.status(404).json({
+      return res.status(error.code === 11000 ? 400 : 500).json({
         success: false,
-        message: "Equipment not found."
+        message:
+          error.code === 11000
+            ? "That asset code already exists."
+            : error.message || "Failed to update equipment."
       });
     }
-
-    res.json({
-      success: true,
-      message: "Equipment updated successfully.",
-      data: equipment
-    });
-  } catch (error) {
-    console.error("Update equipment error:", error);
-
-    res.status(400).json({
-      success: false,
-      message:
-        error.code === 11000
-          ? "That asset code already exists."
-          : error.message || "Failed to update equipment."
-    });
   }
-});
+);
 
 // DELETE: Remove equipment
 router.delete("/:id", async (req, res) => {
@@ -363,7 +377,7 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: "Equipment deleted successfully.",
       data: equipment
@@ -371,7 +385,7 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
     console.error("Delete equipment error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to delete equipment."
     });
@@ -399,14 +413,14 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: equipment
     });
   } catch (error) {
     console.error("Retrieve equipment error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to retrieve equipment."
     });
