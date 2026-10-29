@@ -2,8 +2,13 @@
 import { useState } from "react";
 import "./AIAssistant.css";
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+const API_ROOT = API_BASE.endsWith("/api")
+  ? API_BASE
+  : `${API_BASE}/api`;
 
 const suggestions = {
   student: [
@@ -39,8 +44,7 @@ export default function AIAssistant({ role = "student" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const roleSuggestions =
-    suggestions[role] || suggestions.student;
+  const roleSuggestions = suggestions[role] || suggestions.student;
 
   function chooseSuggestion(question) {
     setMessage(question);
@@ -74,7 +78,7 @@ export default function AIAssistant({ role = "student" }) {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/ai`, {
+      const response = await fetch(`${API_ROOT}/ai`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,7 +94,7 @@ export default function AIAssistant({ role = "student" }) {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to get an AI response."
+          data.message || `AI request failed (${response.status}).`
         );
       }
 
@@ -103,8 +107,7 @@ export default function AIAssistant({ role = "student" }) {
       ]);
     } catch (err) {
       setError(
-        err.message ||
-          "The AI assistant is temporarily unavailable."
+        err.message || "The AI assistant is temporarily unavailable."
       );
     } finally {
       setLoading(false);
@@ -126,6 +129,7 @@ export default function AIAssistant({ role = "student" }) {
           <header className="schoolrow-ai-header">
             <div className="schoolrow-ai-title">
               <div className="schoolrow-ai-avatar">AI</div>
+
               <div>
                 <strong>Schoolrow AI</strong>
                 <p>
@@ -162,7 +166,9 @@ export default function AIAssistant({ role = "student" }) {
             {messages.length === 0 && (
               <div className="schoolrow-ai-welcome">
                 <div className="schoolrow-ai-welcome-icon">✦</div>
+
                 <h3>Hi! How can I help?</h3>
+
                 <p>
                   {role === "admin"
                     ? "Ask me about equipment management, borrowing requests, and returns."
@@ -191,6 +197,7 @@ export default function AIAssistant({ role = "student" }) {
                 <span className="schoolrow-ai-message-label">
                   {item.role === "user" ? "You" : "Schoolrow AI"}
                 </span>
+
                 <p>{item.content}</p>
               </div>
             ))}
@@ -244,7 +251,13 @@ export default function AIAssistant({ role = "student" }) {
         aria-expanded={open}
         aria-label={open ? "Close Schoolrow AI" : "Open Schoolrow AI"}
       >
-        {open ? "×" : <><span>✦</span> AI</>}
+        {open ? (
+          "×"
+        ) : (
+          <>
+            <span>✦</span> AI
+          </>
+        )}
       </button>
     </div>
   );
